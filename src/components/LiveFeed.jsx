@@ -4,24 +4,56 @@ import { AlertTriangle, ArrowRight, Zap, Pause, Play } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
 const TYPE_CONFIG = {
-  Payment: { label: 'PAY', cls: 'badge-payment' },
-  EscrowCreate: { label: 'ESC+', cls: 'badge-escrow' },
-  EscrowFinish: { label: 'ESC✓', cls: 'badge-escrow' },
-  EscrowCancel: { label: 'ESC✗', cls: 'badge-escrow' },
-  OfferCreate: { label: 'OFFER', cls: 'badge-offer' },
-  OfferDelete: { label: 'O-DEL', cls: 'badge-offer' },
-  TrustSet: { label: 'TRUST', cls: 'badge-trust' },
-  AccountSet: { label: 'ACCT', cls: 'badge-other' },
+  // Payments
+  Payment:           { label: 'PAY',    cls: 'badge-payment' },
+  // Escrow
+  EscrowCreate:      { label: 'ESC+',   cls: 'badge-escrow' },
+  EscrowFinish:      { label: 'ESC✓',   cls: 'badge-escrow' },
+  EscrowCancel:      { label: 'ESC✗',   cls: 'badge-escrow' },
+  // DEX offers
+  OfferCreate:       { label: 'OFFER',  cls: 'badge-offer' },
+  OfferCancel:       { label: 'O-CAN',  cls: 'badge-offer' },
+  OfferDelete:       { label: 'O-DEL',  cls: 'badge-offer' },
+  // Trust lines
+  TrustSet:          { label: 'TRUST',  cls: 'badge-trust' },
+  // Account management
+  AccountSet:        { label: 'ACCT',   cls: 'badge-other' },
+  AccountDelete:     { label: 'A-DEL',  cls: 'badge-other' },
+  SetRegularKey:     { label: 'KEY',    cls: 'badge-other' },
+  SignerListSet:     { label: 'SIGN',   cls: 'badge-other' },
+  TicketCreate:      { label: 'TCKT',   cls: 'badge-other' },
+  // NFT
+  NFTokenMint:       { label: 'NFT+',   cls: 'badge-nft' },
+  NFTokenBurn:       { label: 'NFT🔥',  cls: 'badge-nft' },
+  NFTokenCreateOffer:{ label: 'NFTO',   cls: 'badge-nft' },
+  NFTokenCancelOffer:{ label: 'NFTX',   cls: 'badge-nft' },
+  NFTokenAcceptOffer:{ label: 'NFTA',   cls: 'badge-nft' },
+  // AMM
+  AMMCreate:         { label: 'AMM+',   cls: 'badge-amm' },
+  AMMDeposit:        { label: 'AMM↓',   cls: 'badge-amm' },
+  AMMWithdraw:       { label: 'AMM↑',   cls: 'badge-amm' },
+  AMMVote:           { label: 'AMMV',   cls: 'badge-amm' },
+  AMMBid:            { label: 'AMMB',   cls: 'badge-amm' },
+  // Checks
+  CheckCreate:       { label: 'CHK+',   cls: 'badge-other' },
+  CheckCash:         { label: 'CHK✓',   cls: 'badge-other' },
+  CheckCancel:       { label: 'CHK✗',   cls: 'badge-other' },
+  // Oracle / misc
+  OracleSet:         { label: 'ORCL',   cls: 'badge-other' },
+  OracleDelete:      { label: 'ORC✗',   cls: 'badge-other' },
 }
 
+// Wallet addresses get truncated (rXXXX...YYYY); short labels like "DEX · XRP/USD" shown as-is
 function truncate(str, n = 8) {
-  if (!str) return '???'
+  if (!str) return '—'
+  if (str.length <= 16 || !str.startsWith('r')) return str
   return `${str.slice(0, n)}...${str.slice(-4)}`
 }
 
 function formatAmt(amount) {
   const n = parseFloat(amount)
-  if (isNaN(n)) return '0.000'
+  if (amount == null || isNaN(n) || n === 0) return '—'
+  if (n >= 1e12) return `${(n / 1e12).toFixed(2)}T`
   if (n >= 1e9) return `${(n / 1e9).toFixed(2)}B`
   if (n >= 1e6) return `${(n / 1e6).toFixed(2)}M`
   if (n >= 1e3) return `${(n / 1e3).toFixed(2)}K`
@@ -62,7 +94,9 @@ function TxRow({ tx }) {
         <div className="text-xs font-semibold font-mono text-emerald-400">
           {formatAmt(tx.amount)}
         </div>
-        <div className="text-[10px] text-slate-600">{tx.currency || 'RLUSD'}</div>
+        {tx.amount != null && tx.currency && (
+          <div className="text-[10px] text-slate-600">{tx.currency}</div>
+        )}
       </div>
 
       {tx.isAnomaly && (

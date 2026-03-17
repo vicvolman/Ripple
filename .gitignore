@@ -4,3 +4,10 @@ dist/
 .env.local
 .DS_Store
 *.local
+
+# Backend generated files
+backend/ripple.db
+backend/**/__pycache__/
+backend/__pycache__/
+**/*.pyc
+*.pyc

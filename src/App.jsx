@@ -1,19 +1,23 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, BarChart2, AlertTriangle,
-  Wifi, WifiOff, Activity, ChevronRight, Layers
+  Wifi, WifiOff, Activity, ChevronRight, Layers,
+  Search
 } from 'lucide-react'
 import Dashboard from './components/Dashboard.jsx'
 import Analytics from './components/Analytics.jsx'
 import Anomalies from './components/Anomalies.jsx'
+import AddressExplorer from './components/AddressExplorer.jsx'
 import { useXRPLStream } from './hooks/useXRPLStream.js'
 import { useMLClassifier } from './hooks/useMLClassifier.js'
+import { useBackendWebSocket } from './hooks/useBackendWebSocket.js'
 
 const TABS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'analytics', label: 'Analytics', icon: BarChart2 },
   { id: 'anomalies', label: 'Anomalies', icon: AlertTriangle },
+  { id: 'address', label: 'Address', icon: Search },
 ]
 
 function AnimatedLogo() {
@@ -37,7 +41,7 @@ function AnimatedLogo() {
   )
 }
 
-function NetworkStatus({ isConnected, isMockMode, ledgerIndex, tps }) {
+function NetworkStatus({ isConnected, isMockMode, isBackendConnected, backendWsConnected, ledgerIndex, tps }) {
   return (
     <div className="flex items-center gap-4">
       {/* Live indicator */}
@@ -47,6 +51,14 @@ function NetworkStatus({ isConnected, isMockMode, ledgerIndex, tps }) {
           {isConnected ? 'LIVE' : isMockMode ? 'MOCK' : 'OFFLINE'}
         </span>
       </div>
+
+      {/* Backend indicator */}
+      {isBackendConnected && (
+        <div className="hidden sm:flex items-center gap-1.5">
+          <div className={`w-2 h-2 rounded-full ${backendWsConnected ? 'bg-blue-400 animate-pulse' : 'bg-blue-500/50'}`} />
+          <span className="text-xs text-blue-400">API</span>
+        </div>
+      )}
 
       {/* Network */}
       <div className="hidden sm:flex items-center gap-1.5 text-xs text-slate-500">
@@ -76,6 +88,7 @@ function NetworkStatus({ isConnected, isMockMode, ledgerIndex, tps }) {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
+  const [isBackendConnected, setIsBackendConnected] = useState(false)
 
   // XRPL stream
   const {
@@ -91,8 +104,35 @@ export default function App() {
     modelStats,
     anomalyQueue,
     dismissAnomaly,
-    clearAnomalyQueue,
   } = useMLClassifier(transactions)
+
+  // Backend WebSocket
+  const {
+    ledgerUpdates,
+    recentAnomalies,
+    isConnected: backendWsConnected,
+  } = useBackendWebSocket()
+
+  // Check if backend is reachable
+  useEffect(() => {
+    let mounted = true
+    const check = async () => {
+      try {
+        const res = await fetch('http://localhost:8000/api/stats', {
+          signal: AbortSignal.timeout ? AbortSignal.timeout(3000) : undefined,
+        })
+        if (mounted) setIsBackendConnected(res.ok)
+      } catch {
+        if (mounted) setIsBackendConnected(false)
+      }
+    }
+    check()
+    const interval = setInterval(check, 30000)
+    return () => {
+      mounted = false
+      clearInterval(interval)
+    }
+  }, [])
 
   const handleDismissAnomaly = useCallback((id) => {
     dismissAnomaly(id)
@@ -139,13 +179,15 @@ export default function App() {
           <NetworkStatus
             isConnected={isConnected}
             isMockMode={isMockMode}
+            isBackendConnected={isBackendConnected}
+            backendWsConnected={backendWsConnected}
             ledgerIndex={ledgerIndex}
             tps={tps}
           />
         </div>
 
         {/* Mobile tab nav */}
-        <div className="md:hidden border-t border-[#2a3045] flex">
+        <div className="md:hidden border-t border-[#2a3045] flex overflow-x-auto">
           {TABS.map(tab => {
             const Icon = tab.icon
             const isActive = activeTab === tab.id
@@ -154,7 +196,7 @@ export default function App() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`relative flex-1 flex flex-col items-center gap-0.5 py-2 text-[10px] font-medium transition-colors ${
+                className={`relative flex-1 flex flex-col items-center gap-0.5 py-2 text-[10px] font-medium transition-colors shrink-0 min-w-[60px] ${
                   isActive ? 'text-blue-400' : 'text-slate-600'
                 }`}
               >
@@ -180,8 +222,23 @@ export default function App() {
           <span className="text-slate-400 capitalize">{activeTab}</span>
         </div>
 
-        {/* Mock mode banner */}
-        {isMockMode && (
+        {/* Status banner */}
+        {isBackendConnected ? (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-4 flex items-center gap-3 px-4 py-2.5 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-xs"
+          >
+            <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+            <span className="text-emerald-300">
+              Backend Connected — live data streaming from{' '}
+              <span className="font-mono">http://localhost:8000</span>
+              {backendWsConnected && (
+                <span className="ml-2 text-emerald-400">· WebSocket active</span>
+              )}
+            </span>
+          </motion.div>
+        ) : isMockMode ? (
           <motion.div
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -193,7 +250,7 @@ export default function App() {
               <span className="font-mono">wss://s1.ripple.com</span> when connected.
             </span>
           </motion.div>
-        )}
+        ) : null}
 
         {/* Tab panels */}
         <AnimatePresence mode="wait">
@@ -210,6 +267,8 @@ export default function App() {
                 anomalyQueue={anomalyQueue}
                 modelStats={modelStats}
                 onDismissAnomaly={handleDismissAnomaly}
+                ledgerUpdates={ledgerUpdates}
+                recentAnomalies={recentAnomalies}
               />
             )}
             {activeTab === 'analytics' && (
@@ -220,6 +279,9 @@ export default function App() {
                 transactions={transactions}
                 anomalyQueue={anomalyQueue}
               />
+            )}
+            {activeTab === 'address' && (
+              <AddressExplorer />
             )}
           </motion.div>
         </AnimatePresence>

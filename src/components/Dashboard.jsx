@@ -1,13 +1,14 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer
 } from 'recharts'
 import {
   Activity, AlertTriangle, Wallet, DollarSign,
-  X, Shield, ArrowRightLeft
+  X, Shield, ArrowRightLeft, Database, Layers
 } from 'lucide-react'
 import LiveFeed from './LiveFeed.jsx'
+import { useStats, useTopAccounts, useFeeStats } from '../hooks/useAPI.js'
 
 // Animated counter hook
 function useAnimatedCounter(value, duration = 800) {
@@ -25,7 +26,7 @@ function useAnimatedCounter(value, duration = 800) {
     const animate = (now) => {
       const elapsed = now - startTime
       const progress = Math.min(elapsed / duration, 1)
-      const eased = 1 - Math.pow(1 - progress, 3) // cubic ease out
+      const eased = 1 - Math.pow(1 - progress, 3)
       setDisplay(Math.round(start + diff * eased))
       if (progress < 1) {
         rafRef.current = requestAnimationFrame(animate)
@@ -113,16 +114,16 @@ function AnomalyAlert({ anomaly, onDismiss }) {
             {severity}
           </span>
           <span className="text-xs text-slate-400 font-mono">
-            {(anomaly.anomalyScore || anomaly.score || 0).toFixed(3)}
+            {(anomaly.anomalyScore || anomaly.score || anomaly.confidence || 0).toFixed(3)}
           </span>
-          {anomaly.anomalyType && (
+          {(anomaly.anomalyType || anomaly.type) && (
             <span className="text-[10px] text-slate-500 uppercase">
-              {anomaly.anomalyType.replace(/_/g, ' ')}
+              {(anomaly.anomalyType || anomaly.type || '').replace(/_/g, ' ')}
             </span>
           )}
         </div>
         <p className="text-xs text-slate-300 leading-relaxed truncate">
-          {anomaly.reason || anomaly.description || `Anomalous ${anomaly.type} detected`}
+          {anomaly.reason || anomaly.description || `Anomalous ${anomaly.type || 'activity'} detected`}
         </p>
         {anomaly.amount && (
           <div className="text-[10px] text-slate-500 mt-1 font-mono">
@@ -143,6 +144,7 @@ function AnomalyAlert({ anomaly, onDismiss }) {
 // XRPL Payment Flow diagram
 function PaymentFlowDiagram() {
   const [step, setStep] = useState(0)
+  const { data: feeData } = useFeeStats()
 
   useEffect(() => {
     const interval = setInterval(() => setStep(s => (s + 1) % 4), 900)
@@ -150,25 +152,34 @@ function PaymentFlowDiagram() {
   }, [])
 
   const nodes = [
-    { label: 'Sender Wallet', sub: 'rXXXX...YYYY', icon: '👤', color: '#3b82f6' },
+    { label: 'Sender Wallet', sub: 'XRPL Account', icon: '👤', color: '#3b82f6' },
     { label: 'XRPL Ledger', sub: 'Consensus', icon: '🔗', color: '#8b5cf6' },
     { label: 'Validation', sub: 'tesSUCCESS', icon: '✅', color: '#06b6d4' },
-    { label: 'Receiver Wallet', sub: 'rAAAA...BBBB', icon: '🏦', color: '#10b981' },
+    { label: 'Receiver Wallet', sub: 'XRPL Account', icon: '🏦', color: '#10b981' },
   ]
 
   const steps = [
     'Sender signs & submits transaction',
     'XRPL consensus validates ledger',
     'Transaction result confirmed',
-    'RLUSD credited to receiver',
+    'Amount credited to receiver',
   ]
+
+  const { data: statsData } = useStats()
+
+  // Real fee from backend fee-stats endpoint
+  const avgFeeLabel = feeData?.avg_fee_xrp != null
+    ? `${feeData.avg_fee_xrp.toFixed(6)} XRP`
+    : '—'
+
+  const closingTime = '~3-5s'
 
   return (
     <div className="bg-[#1a1f2e] border border-[#2a3045] rounded-xl p-4 h-full">
       <div className="flex items-center gap-2 mb-4">
         <ArrowRightLeft className="w-4 h-4 text-cyan-400" />
         <span className="text-sm font-semibold text-slate-200">XRPL Payment Flow</span>
-        <span className="ml-auto text-[10px] text-slate-600 font-mono">~3-5s settlement</span>
+        <span className="ml-auto text-[10px] text-slate-600 font-mono">{closingTime} settlement</span>
       </div>
 
       <div className="flex items-center justify-between relative mb-4">
@@ -219,9 +230,9 @@ function PaymentFlowDiagram() {
 
       <div className="grid grid-cols-3 gap-2 mt-4">
         {[
-          { label: 'Avg Fee', value: '0.00001 XRP' },
-          { label: 'Finality', value: '~4 seconds' },
-          { label: 'Throughput', value: '1,500 TPS' },
+          { label: 'Avg Fee', value: avgFeeLabel },
+          { label: 'Settlement', value: closingTime },
+          { label: 'Total Txns', value: statsData?.total_transactions != null ? statsData.total_transactions.toLocaleString() : '—' },
         ].map(stat => (
           <div key={stat.label} className="bg-[#0a0e1a] border border-[#2a3045] rounded-lg p-2 text-center">
             <div className="text-xs font-bold text-slate-300">{stat.value}</div>
@@ -254,8 +265,154 @@ const CustomPieTooltip = ({ active, payload }) => {
   )
 }
 
-export default function Dashboard({ transactions, anomalyQueue, modelStats, onDismissAnomaly }) {
+// Confidence color helper
+function confidenceColor(confidence) {
+  if (confidence >= 0.8) return 'bg-red-500'
+  if (confidence >= 0.5) return 'bg-amber-500'
+  return 'bg-yellow-400'
+}
+
+// Type badge for backend anomaly types
+function AnomalyTypeBadge({ type }) {
+  const cfg = {
+    'Sandwich Attack': 'bg-red-500/20 text-red-300 border-red-500/30',
+    'Pathfinder Inflation': 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+    'Wash Trade': 'bg-purple-500/20 text-purple-300 border-purple-500/30',
+  }
+  const cls = cfg[type] || 'bg-slate-500/20 text-slate-300 border-slate-500/30'
+  return (
+    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${cls}`}>
+      {type || 'Unknown'}
+    </span>
+  )
+}
+
+// Recent Anomalies Panel (from backend WS)
+function RecentAnomaliesPanel({ recentAnomalies }) {
+  const items = (recentAnomalies || []).slice(0, 5)
+
+  if (items.length === 0) return null
+
+  return (
+    <div className="bg-[#1a1f2e] border border-[#2a3045] rounded-xl p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <AlertTriangle className="w-4 h-4 text-red-400" />
+        <span className="text-sm font-semibold text-slate-200">Recent Anomaly Alerts</span>
+        <span className="ml-auto text-[10px] text-slate-500 font-mono">Live · backend</span>
+      </div>
+      <div className="space-y-2">
+        {items.map((item, i) => {
+          const confidence = item.confidence ?? item.score ?? 0
+          const attacker = item.attacker || item.address || ''
+          return (
+            <div key={item.id || i} className="flex items-center gap-3 py-1.5 border-b border-[#2a3045]/50 last:border-0">
+              <AnomalyTypeBadge type={item.anomaly_type || item.type} />
+              <div className="flex-1 min-w-0">
+                <div className="text-[11px] font-mono text-slate-400 truncate">
+                  {attacker ? `${attacker.slice(0, 10)}...${attacker.slice(-4)}` : '—'}
+                </div>
+              </div>
+              {/* Confidence bar */}
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="w-16 h-1.5 bg-[#0a0e1a] rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${confidenceColor(confidence)}`}
+                    style={{ width: `${Math.round(confidence * 100)}%` }}
+                  />
+                </div>
+                <span className="text-[10px] font-mono text-slate-500 w-7 text-right">
+                  {Math.round(confidence * 100)}%
+                </span>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// Last Ledger card (from backend WS)
+function LastLedgerCard({ ledgerUpdates }) {
+  const latest = ledgerUpdates && ledgerUpdates.length > 0 ? ledgerUpdates[0] : null
+  if (!latest) return null
+
+  const ledgerIndex = latest.ledger_index ?? latest.ledgerIndex
+  const txCount = latest.tx_count ?? latest.txn_count ?? latest.transactions ?? '—'
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-[#1a1f2e] border border-blue-500/20 rounded-xl p-5 flex items-center gap-4 hover:border-blue-500/40 transition-all duration-200"
+    >
+      <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-blue-500/10 text-blue-400 shrink-0">
+        <Layers className="w-6 h-6" />
+      </div>
+      <div className="min-w-0">
+        <div className="text-2xl font-bold text-slate-100 font-mono tabular-nums">
+          #{ledgerIndex?.toLocaleString() ?? '—'}
+        </div>
+        <div className="text-xs text-slate-500 mt-0.5">Last Ledger</div>
+        <div className="text-xs text-slate-600 mt-0.5">{txCount} txns</div>
+      </div>
+      <div className="ml-auto">
+        <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+      </div>
+    </motion.div>
+  )
+}
+
+// Backend stats KPI row — uses real /api/stats data
+function BackendStatsRow({ statsData }) {
+  if (!statsData) return null
+
+  const totalTx = statsData.total_transactions ?? 0
+  const totalLedgers = statsData.total_ledgers ?? 0
+  // API returns keys like "sandwich", "wash_trade"
+  const anomalyTypes = statsData.anomaly_count_by_type ?? {}
+  const totalAnomalies = Object.values(anomalyTypes).reduce((s, v) => s + (v ?? 0), 0)
+  const sandwichCount = anomalyTypes.sandwich ?? 0
+  const washCount = anomalyTypes.wash_trade ?? 0
+
+  return (
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <StatCard
+        icon={Database}
+        label="Total Transactions"
+        value={totalTx}
+        subValue={`${totalLedgers.toLocaleString()} ledgers`}
+        color="bg-cyan-500/15 text-cyan-400"
+      />
+      <StatCard
+        icon={AlertTriangle}
+        label="Total Anomalies"
+        value={totalAnomalies}
+        subValue="All detected types"
+        color="bg-red-500/15 text-red-400"
+      />
+      <StatCard
+        icon={Shield}
+        label="Sandwich Attacks"
+        value={sandwichCount}
+        subValue="Front-running detected"
+        color="bg-orange-500/15 text-orange-400"
+      />
+      <StatCard
+        icon={Activity}
+        label="Wash Trade Clusters"
+        value={washCount}
+        subValue="NGFR < 0.05 flagged"
+        color="bg-purple-500/15 text-purple-400"
+      />
+    </div>
+  )
+}
+
+export default function Dashboard({ transactions, anomalyQueue, modelStats, onDismissAnomaly, ledgerUpdates, recentAnomalies }) {
   const [localAnomalies, setLocalAnomalies] = useState([])
+  const { data: statsData } = useStats()
+  const { data: topAccountsData } = useTopAccounts()
 
   // Merge incoming anomaly queue with local display
   useEffect(() => {
@@ -271,57 +428,37 @@ export default function Dashboard({ transactions, anomalyQueue, modelStats, onDi
     onDismissAnomaly?.(id)
   }, [onDismissAnomaly])
 
-  // Compute stats
-  const totalTx = transactions.length
-  const totalVolume = transactions.reduce((sum, tx) => sum + (parseFloat(tx.amount) || 0), 0)
-  const uniqueWallets = new Set([...transactions.map(tx => tx.from), ...transactions.map(tx => tx.to)]).size
-  const anomalyCount = (anomalyQueue || []).length + transactions.filter(t => t.isAnomaly).length
+  // Pie chart: anomaly breakdown from real stats, or top accounts by isolation score
+  const anomalyTypes = statsData?.anomaly_count_by_type ?? {}
+  const pieData = Object.entries(anomalyTypes)
+    .filter(([, v]) => v > 0)
+    .map(([k, v], i) => ({
+      name: k.replace(/_/g, ' '),
+      value: v,
+      percentage: statsData?.total_transactions
+        ? ((v / statsData.total_transactions) * 100).toFixed(2)
+        : '—',
+    }))
 
-  // Pie chart data
-  const typeDistribution = modelStats?.typeDistribution || []
-  const pieData = typeDistribution.slice(0, 7).map(d => ({
-    name: d.type,
-    value: d.count,
-    percentage: d.percentage,
-  }))
+  // Top addresses for isolation score display
+  const topAddresses = topAccountsData?.accounts ?? []
+
+  const hasLedgerUpdates = ledgerUpdates && ledgerUpdates.length > 0
+  const hasRecentAnomalies = recentAnomalies && recentAnomalies.length > 0
 
   return (
     <div className="space-y-6">
-      {/* Stats Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          icon={Activity}
-          label="Total Transactions"
-          value={totalTx}
-          subValue="Last 100 live"
-          color="bg-blue-500/15 text-blue-400"
-          trend={8}
-        />
-        <StatCard
-          icon={DollarSign}
-          label="RLUSD Volume"
-          value={formatVolume(totalVolume)}
-          subValue="Rolling window"
-          color="bg-emerald-500/15 text-emerald-400"
-          trend={12}
-        />
-        <StatCard
-          icon={Wallet}
-          label="Unique Wallets"
-          value={uniqueWallets}
-          subValue="Senders & receivers"
-          color="bg-purple-500/15 text-purple-400"
-          trend={3}
-        />
-        <StatCard
-          icon={AlertTriangle}
-          label="Anomalies Detected"
-          value={(anomalyQueue || []).length}
-          subValue={`${(modelStats?.anomalyRate || 0).toFixed(1)}% rate`}
-          color="bg-red-500/15 text-red-400"
-          trend={-2}
-        />
-      </div>
+      {/* Real KPI row from /api/stats */}
+      {statsData
+        ? <BackendStatsRow statsData={statsData} />
+        : (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {[1,2,3,4].map(i => (
+              <div key={i} className="bg-[#1a1f2e] border border-[#2a3045] rounded-xl p-5 h-24 animate-pulse" />
+            ))}
+          </div>
+        )
+      }
 
       {/* Main content grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -330,73 +467,66 @@ export default function Dashboard({ transactions, anomalyQueue, modelStats, onDi
           <LiveFeed transactions={transactions} maxItems={20} />
         </div>
 
-        {/* ML Classification Donut */}
+        {/* Anomaly type breakdown pie — real data from /api/stats */}
         <div className="bg-[#1a1f2e] border border-[#2a3045] rounded-xl p-4">
           <div className="flex items-center gap-2 mb-4">
             <Shield className="w-4 h-4 text-purple-400" />
-            <span className="text-sm font-semibold text-slate-200">ML Classification</span>
-            <span className="ml-auto text-xs text-slate-500 font-mono">
-              {modelStats?.name || 'Isolation Forest + RF'}
-            </span>
+            <span className="text-sm font-semibold text-slate-200">Anomaly Breakdown</span>
+            <span className="ml-auto text-[10px] text-blue-400 font-mono">Backend · real data</span>
           </div>
 
           {pieData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={260}>
+            <ResponsiveContainer width="100%" height={220}>
               <PieChart>
                 <Pie
                   data={pieData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={60}
-                  outerRadius={90}
-                  paddingAngle={2}
+                  innerRadius={55}
+                  outerRadius={85}
+                  paddingAngle={3}
                   dataKey="value"
                   animationBegin={0}
                   animationDuration={800}
                 >
                   {pieData.map((entry, index) => (
-                    <Cell
-                      key={entry.name}
-                      fill={CHART_COLORS[index % CHART_COLORS.length]}
-                      stroke="none"
-                    />
+                    <Cell key={entry.name} fill={CHART_COLORS[index % CHART_COLORS.length]} stroke="none" />
                   ))}
                 </Pie>
                 <Tooltip content={<CustomPieTooltip />} />
-                <Legend
-                  formatter={(value) => (
-                    <span className="text-xs text-slate-400">{value}</span>
-                  )}
-                />
+                <Legend formatter={(value) => <span className="text-xs text-slate-400 capitalize">{value}</span>} />
               </PieChart>
             </ResponsiveContainer>
           ) : (
-            <div className="h-64 flex items-center justify-center text-slate-600 text-sm">
-              Classifying transactions...
+            <div className="h-56 flex items-center justify-center text-slate-600 text-sm animate-pulse">
+              Loading anomaly data...
             </div>
           )}
 
-          {/* Model accuracy badge */}
-          <div className="mt-2 flex items-center justify-center gap-4">
-            <div className="text-center">
-              <div className="text-lg font-bold text-emerald-400 font-mono">
-                {((modelStats?.accuracy || 0.963) * 100).toFixed(1)}%
+          {/* Isolation Forest summary */}
+          {topAddresses.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-[#2a3045]">
+              <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-2">Top flagged addresses (Isolation Forest)</div>
+              <div className="space-y-1">
+                {topAddresses.slice(0, 3).map((acc, i) => (
+                  <div key={i} className="flex items-center gap-2 text-xs">
+                    <span className="font-mono text-slate-400 truncate flex-1">
+                      {acc.address?.slice(0, 12)}...{acc.address?.slice(-4)}
+                    </span>
+                    <div className="w-16 h-1.5 bg-[#0a0e1a] rounded-full overflow-hidden shrink-0">
+                      <div
+                        className={`h-full rounded-full ${(acc.isolation_score ?? 0) >= 0.7 ? 'bg-red-500' : 'bg-amber-400'}`}
+                        style={{ width: `${Math.round((acc.isolation_score ?? 0) * 100)}%` }}
+                      />
+                    </div>
+                    <span className="font-mono text-slate-500 w-8 text-right shrink-0">
+                      {((acc.isolation_score ?? 0) * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                ))}
               </div>
-              <div className="text-[10px] text-slate-600">Accuracy</div>
             </div>
-            <div className="text-center">
-              <div className="text-lg font-bold text-blue-400 font-mono">
-                {modelStats?.features || 8}
-              </div>
-              <div className="text-[10px] text-slate-600">Features</div>
-            </div>
-            <div className="text-center">
-              <div className="text-lg font-bold text-purple-400 font-mono">
-                {modelStats?.totalClassified || 0}
-              </div>
-              <div className="text-[10px] text-slate-600">Classified</div>
-            </div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -447,6 +577,11 @@ export default function Dashboard({ transactions, anomalyQueue, modelStats, onDi
         {/* XRPL Payment Flow */}
         <PaymentFlowDiagram />
       </div>
+
+      {/* Recent Anomalies from backend WS */}
+      {hasRecentAnomalies && (
+        <RecentAnomaliesPanel recentAnomalies={recentAnomalies} />
+      )}
     </div>
   )
 }

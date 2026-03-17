@@ -9,26 +9,53 @@ let activeCallbacks = []
 let wsInstance = null
 let reconnectTimer = null
 
+// Resolve a meaningful "to" label for live XRPL transactions with no destination
+function resolveDestinationLive(tx) {
+  if (tx.Destination) return tx.Destination
+  const type = tx.TransactionType || ''
+  if (type === 'OfferCreate' || type === 'OfferCancel' || type === 'OfferDelete') {
+    const base = tx.TakerGets?.currency || tx.TakerPays?.currency
+    const quote = tx.TakerPays?.currency || tx.TakerGets?.currency
+    return base && quote ? `DEX · ${base}/${quote}` : 'DEX'
+  }
+  if (type.startsWith('NFToken')) return 'NFT'
+  if (type === 'TrustSet') return 'TRUST LINE'
+  if (type === 'AccountSet' || type === 'SetRegularKey') return 'SELF'
+  if (type === 'EscrowCreate' || type === 'EscrowFinish' || type === 'EscrowCancel') return 'ESCROW'
+  if (type.startsWith('AMM')) return 'AMM POOL'
+  if (type.startsWith('Check')) return 'CHECK'
+  return 'LEDGER'
+}
+
 // Format raw XRPL transaction into normalized form
 export function formatTransaction(rawTx) {
   const tx = rawTx?.transaction || rawTx?.tx || rawTx || {}
   const meta = rawTx?.meta || {}
 
-  let amount = 0
-  let currency = 'XRP'
+  let amount = null
+  let currency = ''
 
   if (tx.Amount) {
     if (typeof tx.Amount === 'string') {
-      amount = parseFloat(tx.Amount) / 1_000_000 // drops to XRP
+      amount = parseFloat(tx.Amount) / 1_000_000
       currency = 'XRP'
     } else if (typeof tx.Amount === 'object') {
-      amount = parseFloat(tx.Amount.value) || 0
-      currency = tx.Amount.currency || 'RLUSD'
+      amount = parseFloat(tx.Amount.value) || null
+      currency = tx.Amount.currency || ''
+    }
+  } else if (tx.TakerGets) {
+    // OfferCreate: show the offer size
+    if (typeof tx.TakerGets === 'string') {
+      amount = parseFloat(tx.TakerGets) / 1_000_000
+      currency = 'XRP'
+    } else if (typeof tx.TakerGets === 'object') {
+      amount = parseFloat(tx.TakerGets.value) || null
+      currency = tx.TakerGets.currency || ''
     }
   } else if (tx.SendMax) {
     if (typeof tx.SendMax === 'object') {
-      amount = parseFloat(tx.SendMax.value) || 0
-      currency = tx.SendMax.currency || 'RLUSD'
+      amount = parseFloat(tx.SendMax.value) || null
+      currency = tx.SendMax.currency || ''
     }
   }
 
@@ -41,8 +68,8 @@ export function formatTransaction(rawTx) {
     hash: tx.hash || hash,
     type: tx.TransactionType || 'Payment',
     from: tx.Account || 'rUnknown',
-    to: tx.Destination || tx.Account || 'rUnknown',
-    amount: Math.round(amount * 1000) / 1000,
+    to: resolveDestinationLive(tx),
+    amount,
     currency,
     timestamp: tx.date
       ? new Date((tx.date + 946684800) * 1000).toISOString()

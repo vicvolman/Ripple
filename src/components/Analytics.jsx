@@ -1,22 +1,16 @@
-import { useMemo, useState, useEffect } from 'react'
+import { useState } from 'react'
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, RadarChart, Radar, PolarGrid, PolarAngleAxis,
   LineChart, Line, ReferenceLine, Area, AreaChart, ComposedChart
 } from 'recharts'
 import { motion } from 'framer-motion'
-import { TrendingUp, Grid, BarChart2, Activity, Users } from 'lucide-react'
-import {
-  generateDailyVolumeData,
-  generateHeatmapData,
-  generateBollingerData,
-  getTopWalletPairs,
-  HISTORICAL_TRANSACTIONS,
-} from '../utils/mockData.js'
-import { computeRadarData } from '../utils/mlModels.js'
+import { TrendingUp, BarChart2, Activity, Users, Clock, Grid } from 'lucide-react'
+import { useVolume, useTopAccounts, useTxTypes, useWalletPairs, useVolumeSeries } from '../hooks/useAPI.js'
 
-// Custom tooltip base
-const CustomTooltipBase = ({ active, payload, label, formatter }) => {
+const CHART_COLORS = ['#3b82f6', '#8b5cf6', '#f59e0b', '#10b981', '#06b6d4', '#ef4444', '#f97316', '#ec4899']
+
+const CustomTooltip = ({ active, payload, label, formatter }) => {
   if (!active || !payload?.length) return null
   return (
     <div className="bg-[#1a1f2e] border border-[#2a3045] rounded-lg p-3 shadow-xl text-xs">
@@ -26,7 +20,7 @@ const CustomTooltipBase = ({ active, payload, label, formatter }) => {
           <div className="w-2 h-2 rounded-full" style={{ background: p.color }} />
           <span className="text-slate-400">{p.name}:</span>
           <span className="font-bold font-mono" style={{ color: p.color }}>
-            {formatter ? formatter(p.value, p.name) : p.value}
+            {formatter ? formatter(p.value) : p.value}
           </span>
         </div>
       ))}
@@ -34,380 +28,325 @@ const CustomTooltipBase = ({ active, payload, label, formatter }) => {
   )
 }
 
-// 7-Day Volume Bar Chart
-function VolumeBarChart({ data }) {
+function Card({ children, className = '' }) {
   return (
-    <div className="bg-[#1a1f2e] border border-[#2a3045] rounded-xl p-5">
-      <div className="flex items-center gap-2 mb-4">
-        <BarChart2 className="w-4 h-4 text-blue-400" />
-        <span className="text-sm font-semibold text-slate-200">7-Day RLUSD Volume</span>
-      </div>
-      <ResponsiveContainer width="100%" height={220}>
-        <BarChart data={data} barGap={2} barSize={18}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1a2035" vertical={false} />
-          <XAxis
-            dataKey="date"
-            tick={{ fill: '#64748b', fontSize: 11 }}
-            axisLine={false}
-            tickLine={false}
-          />
-          <YAxis
-            tick={{ fill: '#64748b', fontSize: 11 }}
-            axisLine={false}
-            tickLine={false}
-            tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(1)}K` : v}
-          />
-          <Tooltip
-            content={
-              <CustomTooltipBase
-                formatter={(v, name) => `${parseFloat(v).toFixed(2)} RLUSD`}
-              />
-            }
-          />
-          <Legend
-            wrapperStyle={{ fontSize: '11px', color: '#94a3b8' }}
-          />
-          <Bar dataKey="normalVolume" name="Normal Volume" fill="#3b82f6" radius={[3, 3, 0, 0]} />
-          <Bar dataKey="anomalousVolume" name="Anomalous Volume" fill="#ef4444" radius={[3, 3, 0, 0]} />
-        </BarChart>
-      </ResponsiveContainer>
+    <div className={`bg-[#1a1f2e] border border-[#2a3045] rounded-xl p-5 ${className}`}>
+      {children}
     </div>
   )
 }
 
-// Radar chart
-function TxTypeRadarChart({ data }) {
+function CardHeader({ icon: Icon, title, iconColor = 'text-blue-400', badge }) {
   return (
-    <div className="bg-[#1a1f2e] border border-[#2a3045] rounded-xl p-5">
-      <div className="flex items-center gap-2 mb-4">
-        <Activity className="w-4 h-4 text-purple-400" />
-        <span className="text-sm font-semibold text-slate-200">Transaction Type Distribution</span>
-      </div>
-      <ResponsiveContainer width="100%" height={220}>
-        <RadarChart data={data}>
-          <PolarGrid stroke="#2a3045" />
-          <PolarAngleAxis
-            dataKey="type"
-            tick={{ fill: '#64748b', fontSize: 10 }}
-          />
-          <Radar
-            name="Count"
-            dataKey="count"
-            stroke="#8b5cf6"
-            fill="#8b5cf6"
-            fillOpacity={0.25}
-            strokeWidth={2}
-          />
-          <Tooltip
-            content={<CustomTooltipBase formatter={(v) => `${v} txns`} />}
-          />
-        </RadarChart>
-      </ResponsiveContainer>
+    <div className="flex items-center gap-2 mb-4">
+      <Icon className={`w-4 h-4 ${iconColor}`} />
+      <span className="text-sm font-semibold text-slate-200">{title}</span>
+      {badge && <span className="ml-auto text-[10px] text-blue-400 font-mono">{badge}</span>}
     </div>
   )
 }
 
-// Heatmap cell
-function HeatmapCell({ cell, maxVolume }) {
-  const [tooltip, setTooltip] = useState(false)
-  const intensity = maxVolume > 0 ? cell.volume / maxVolume : 0
+function Skeleton({ h = 220 }) {
+  return <div className="animate-pulse bg-[#2a3045]/40 rounded-lg" style={{ height: h }} />
+}
 
-  let bg
-  if (cell.hasAnomaly) {
-    bg = `rgba(239, 68, 68, ${0.3 + intensity * 0.7})`
-  } else if (intensity > 0) {
-    const r = Math.round(59 + (139 - 59) * intensity)
-    const g = Math.round(130 - 130 * intensity)
-    const b = Math.round(246 - 100 * intensity)
-    bg = `rgba(${r}, ${g}, ${b}, ${0.15 + intensity * 0.7})`
-  } else {
-    bg = 'rgba(42, 48, 69, 0.3)'
-  }
+// ── Volume: Raw vs Adjusted ───────────────────────────────────────────────────
+
+function VolumeChart({ data, loading }) {
+  if (loading) return <Skeleton />
+  const buckets = data?.buckets ?? []
+  if (!buckets.length) return <p className="text-slate-600 text-sm text-center py-12">No volume data</p>
+
+  const chartData = buckets.map(b => ({
+    time: (b.timestamp ?? '').slice(-5),
+    raw: +(b.raw_volume ?? 0).toFixed(2),
+    adjusted: +(b.adjusted_volume ?? 0).toFixed(2),
+    anomalies: b.anomaly_count ?? 0,
+  }))
 
   return (
-    <div
-      className="heatmap-cell rounded-sm relative"
-      style={{ background: bg, width: '100%', paddingBottom: '90%' }}
-      onMouseEnter={() => setTooltip(true)}
-      onMouseLeave={() => setTooltip(false)}
-    >
-      {cell.hasAnomaly && (
-        <div className="absolute inset-0 rounded-sm animate-ping-slow"
-          style={{ background: 'rgba(239, 68, 68, 0.3)' }}
-        />
-      )}
-      {tooltip && (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-50 bg-[#1a1f2e] border border-[#2a3045] rounded-lg px-2 py-1.5 text-[10px] text-slate-300 whitespace-nowrap shadow-xl pointer-events-none">
-          <div>{cell.dayLabel} {String(cell.hour).padStart(2, '0')}:00</div>
-          <div className="font-mono text-emerald-400">{cell.volume.toFixed(1)} RLUSD</div>
-          <div className="text-slate-500">{cell.txCount} txns</div>
-          {cell.hasAnomaly && <div className="text-red-400">⚠ Anomaly</div>}
-        </div>
-      )}
+    <ResponsiveContainer width="100%" height={220}>
+      <AreaChart data={chartData}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#1a2035" vertical={false} />
+        <XAxis dataKey="time" tick={{ fill: '#64748b', fontSize: 9 }} axisLine={false} tickLine={false} />
+        <YAxis tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false}
+          tickFormatter={v => v >= 1e6 ? `${(v/1e6).toFixed(1)}M` : v >= 1000 ? `${(v/1000).toFixed(1)}K` : v} />
+        <Tooltip content={<CustomTooltip formatter={v => `${(+v).toLocaleString()} drops`} />} />
+        <Legend wrapperStyle={{ fontSize: '11px', color: '#94a3b8' }} />
+        <Area type="monotone" dataKey="raw" name="Raw Volume" stroke="#3b82f6" fill="#3b82f615" strokeWidth={2} dot={false} />
+        <Area type="monotone" dataKey="adjusted" name="Adjusted Volume" stroke="#10b981" fill="#10b98115" strokeWidth={2} dot={false} />
+      </AreaChart>
+    </ResponsiveContainer>
+  )
+}
+
+function VolumeSummaryCards({ data }) {
+  if (!data?.summary) return null
+  const s = data.summary
+  const cards = [
+    { label: 'Raw Volume (drops)', value: (s.raw_total ?? 0).toExponential(3), color: 'text-blue-400' },
+    { label: 'Adjusted Volume', value: (s.adjusted_total ?? 0).toExponential(3), color: 'text-emerald-400' },
+    { label: 'Wash Trade Ratio', value: `${((s.wash_trade_ratio ?? 0) * 100).toFixed(2)}%`, color: 'text-red-400' },
+    { label: 'Dust Tx Ratio', value: `${((s.dust_ratio ?? 0) * 100).toFixed(1)}%`, color: 'text-amber-400' },
+  ]
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      {cards.map(c => (
+        <motion.div key={c.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+          className="bg-[#1a1f2e] border border-[#2a3045] rounded-xl p-4 text-center">
+          <div className={`text-lg font-bold font-mono ${c.color}`}>{c.value}</div>
+          <div className="text-[10px] text-slate-500 mt-1">{c.label}</div>
+        </motion.div>
+      ))}
     </div>
   )
 }
 
-function HeatmapGrid({ data }) {
-  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-  const maxVolume = Math.max(...data.map(d => d.volume), 1)
+// ── Transaction type radar ────────────────────────────────────────────────────
 
-  const grouped = useMemo(() => {
-    const result = []
-    for (let d = 0; d < 7; d++) {
-      result.push(data.filter(cell => cell.day === d))
-    }
-    return result
-  }, [data])
+function TxTypeRadar({ data, loading }) {
+  if (loading) return <Skeleton />
+  const types = data?.types ?? []
+  if (!types.length) return <p className="text-slate-600 text-sm text-center py-12">No data</p>
+
+  const radarData = types.slice(0, 8).map(t => ({
+    type: t.tx_type?.replace(/([A-Z])/g, ' $1').trim() ?? t.tx_type,
+    count: t.count,
+  }))
 
   return (
-    <div className="bg-[#1a1f2e] border border-[#2a3045] rounded-xl p-5">
-      <div className="flex items-center gap-2 mb-4">
-        <Grid className="w-4 h-4 text-cyan-400" />
-        <span className="text-sm font-semibold text-slate-200">24×7 Transaction Heatmap</span>
-        <div className="ml-auto flex items-center gap-2 text-[10px] text-slate-500">
-          <span className="w-3 h-3 rounded-sm" style={{ background: 'rgba(59, 130, 246, 0.4)' }} />
-          Normal
-          <span className="w-3 h-3 rounded-sm" style={{ background: 'rgba(239, 68, 68, 0.6)' }} />
-          Anomaly
-        </div>
-      </div>
-
-      {/* Hour labels */}
-      <div className="flex mb-1 pl-8">
-        {Array.from({ length: 24 }, (_, h) => (
-          <div key={h} className="flex-1 text-center text-[8px] text-slate-700">
-            {h % 4 === 0 ? String(h).padStart(2, '0') : ''}
-          </div>
-        ))}
-      </div>
-
-      {/* Grid */}
-      <div className="space-y-0.5">
-        {grouped.map((dayData, dayIdx) => (
-          <div key={dayIdx} className="flex items-center gap-0.5">
-            <div className="text-[9px] text-slate-600 w-7 text-right pr-1 shrink-0">
-              {dayData[0]?.dayLabel || days[dayIdx]}
-            </div>
-            {dayData.map((cell, hourIdx) => (
-              <div key={hourIdx} className="flex-1">
-                <HeatmapCell cell={cell} maxVolume={maxVolume} />
-              </div>
-            ))}
-          </div>
-        ))}
-      </div>
-
-      {/* Legend scale */}
-      <div className="mt-3 flex items-center gap-2">
-        <span className="text-[9px] text-slate-600">Low</span>
-        <div className="flex-1 h-1.5 rounded" style={{
-          background: 'linear-gradient(90deg, rgba(42,48,69,0.3), rgba(59,130,246,0.8))'
-        }} />
-        <span className="text-[9px] text-slate-600">High</span>
-      </div>
-    </div>
+    <ResponsiveContainer width="100%" height={220}>
+      <RadarChart data={radarData}>
+        <PolarGrid stroke="#2a3045" />
+        <PolarAngleAxis dataKey="type" tick={{ fill: '#64748b', fontSize: 9 }} />
+        <Radar name="Count" dataKey="count" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.25} strokeWidth={2} />
+        <Tooltip content={<CustomTooltip formatter={v => `${v.toLocaleString()} txns`} />} />
+      </RadarChart>
+    </ResponsiveContainer>
   )
 }
 
-// Bollinger bands chart
-function BollingerChart({ data }) {
-  const spikes = data.filter(d => d.isSpike)
+// ── Bollinger band volume ─────────────────────────────────────────────────────
+
+function BollingerChart({ data, loading }) {
+  if (loading) return <Skeleton h={200} />
+  const points = data?.points ?? []
+  if (!points.length) return <p className="text-slate-600 text-sm text-center py-12">No data</p>
+
+  // Sample to max 100 points to keep chart readable
+  const step = Math.max(1, Math.floor(points.length / 100))
+  const sampled = points.filter((_, i) => i % step === 0)
+  const spikes = sampled.filter(p => p.is_spike)
 
   return (
-    <div className="bg-[#1a1f2e] border border-[#2a3045] rounded-xl p-5">
-      <div className="flex items-center gap-2 mb-4">
-        <TrendingUp className="w-4 h-4 text-emerald-400" />
-        <span className="text-sm font-semibold text-slate-200">Volume Spike Detection (48h)</span>
-        <span className="ml-auto text-xs text-red-400 font-mono">{spikes.length} spikes</span>
-      </div>
+    <>
       <ResponsiveContainer width="100%" height={200}>
-        <ComposedChart data={data}>
+        <ComposedChart data={sampled}>
           <CartesianGrid strokeDasharray="3 3" stroke="#1a2035" vertical={false} />
-          <XAxis
-            dataKey="time"
-            tick={{ fill: '#64748b', fontSize: 9 }}
-            axisLine={false}
-            tickLine={false}
-            interval={7}
-          />
-          <YAxis
-            tick={{ fill: '#64748b', fontSize: 10 }}
-            axisLine={false}
-            tickLine={false}
-            tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(1)}K` : v}
-          />
-          <Tooltip content={<CustomTooltipBase formatter={(v) => `${parseFloat(v).toFixed(1)} RLUSD`} />} />
-
-          {/* Bollinger bands */}
-          <Area
-            type="monotone"
-            dataKey="upper"
-            stroke="#3b82f620"
-            fill="#3b82f610"
-            strokeWidth={1}
-            dot={false}
-            name="Upper Band"
-          />
-          <Area
-            type="monotone"
-            dataKey="lower"
-            stroke="#3b82f620"
-            fill="#0a0e1a"
-            strokeWidth={1}
-            dot={false}
-            name="Lower Band"
-          />
-          <Line
-            type="monotone"
-            dataKey="sma"
-            stroke="#3b82f660"
-            strokeWidth={1}
-            dot={false}
-            strokeDasharray="4 2"
-            name="SMA"
-          />
-          <Line
-            type="monotone"
-            dataKey="volume"
-            stroke="#10b981"
-            strokeWidth={2}
-            dot={false}
-            name="Volume"
-            activeDot={{ r: 4, fill: '#10b981' }}
-          />
-
-          {/* Spike markers */}
-          {spikes.slice(0, 5).map((spike, i) => (
-            <ReferenceLine
-              key={i}
-              x={spike.time}
-              stroke="#ef4444"
-              strokeWidth={1}
-              strokeDasharray="2 2"
-            />
+          <XAxis dataKey="time" tick={{ fill: '#64748b', fontSize: 9 }} axisLine={false} tickLine={false} interval={Math.floor(sampled.length / 8)} />
+          <YAxis tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false}
+            tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(1)}K` : v} />
+          <Tooltip content={<CustomTooltip formatter={v => `${(+v).toFixed(2)} XRP`} />} />
+          <Area type="monotone" dataKey="upper" stroke="#3b82f620" fill="#3b82f610" strokeWidth={1} dot={false} name="Upper" />
+          <Area type="monotone" dataKey="lower" stroke="#3b82f620" fill="#0a0e1a" strokeWidth={1} dot={false} name="Lower" />
+          <Line type="monotone" dataKey="sma" stroke="#3b82f660" strokeWidth={1} dot={false} strokeDasharray="4 2" name="SMA" />
+          <Line type="monotone" dataKey="volume" stroke="#10b981" strokeWidth={2} dot={false} name="Volume (XRP)" activeDot={{ r: 4 }} />
+          {spikes.slice(0, 8).map((s, i) => (
+            <ReferenceLine key={i} x={s.time} stroke="#ef4444" strokeWidth={1} strokeDasharray="2 2" />
           ))}
         </ComposedChart>
       </ResponsiveContainer>
-      <div className="flex items-center gap-4 mt-2 text-[10px]">
-        <div className="flex items-center gap-1"><div className="w-3 h-0.5 bg-emerald-500 rounded" /> Volume</div>
-        <div className="flex items-center gap-1"><div className="w-3 h-0.5 bg-blue-500/40 rounded" /> Bollinger Bands</div>
-        <div className="flex items-center gap-1"><div className="w-3 h-0.5 bg-blue-500/30 rounded border-dashed" /> SMA</div>
-        <div className="flex items-center gap-1"><div className="w-0.5 h-3 bg-red-500 rounded" /> Spike</div>
+      <div className="flex items-center gap-4 mt-2 text-[10px] text-slate-500">
+        <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-emerald-500 inline-block rounded" /> Volume (XRP)</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-blue-500/40 inline-block rounded" /> Bollinger Bands</span>
+        <span className="flex items-center gap-1"><span className="w-0.5 h-3 bg-red-500 inline-block rounded" /> Spike ({spikes.length})</span>
       </div>
-    </div>
+    </>
   )
 }
 
-// Top wallet pairs table
-function AgentPairsTable({ pairs }) {
+// ── Top wallet pairs ──────────────────────────────────────────────────────────
+
+function WalletPairsTable({ data, loading }) {
+  if (loading) return <Skeleton h={180} />
+  const pairs = data?.pairs ?? []
+  if (!pairs.length) return <p className="text-slate-600 text-sm text-center py-8">No data</p>
+
   return (
-    <div className="bg-[#1a1f2e] border border-[#2a3045] rounded-xl p-5">
-      <div className="flex items-center gap-2 mb-4">
-        <Users className="w-4 h-4 text-yellow-400" />
-        <span className="text-sm font-semibold text-slate-200">Top Wallet Pairs by Volume</span>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>From</th>
-              <th>To</th>
-              <th>Volume (RLUSD)</th>
-              <th>Txns</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pairs.map((pair, i) => (
-              <tr key={pair.key || i}>
-                <td className="text-slate-600 text-xs">{i + 1}</td>
-                <td className="font-mono text-xs text-blue-400">{pair.fromShort}</td>
-                <td className="font-mono text-xs text-purple-400">{pair.toShort}</td>
-                <td className="font-mono text-xs font-semibold text-emerald-400">
-                  {pair.volume >= 1000
-                    ? `${(pair.volume / 1000).toFixed(2)}K`
-                    : pair.volume.toFixed(2)
-                  }
-                </td>
-                <td className="text-xs text-slate-400">{pair.txCount}</td>
-              </tr>
+    <div className="overflow-x-auto">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="border-b border-[#2a3045]">
+            {['#', 'From', 'To', 'Volume (XRP)', 'Txns'].map(h => (
+              <th key={h} className="text-left text-[10px] text-slate-600 uppercase tracking-wider font-semibold pb-2 pr-4">{h}</th>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </tr>
+        </thead>
+        <tbody>
+          {pairs.map((p, i) => (
+            <tr key={i} className="border-b border-[#2a3045]/40 hover:bg-[#242938] transition-colors">
+              <td className="py-2 pr-4 text-slate-600">{i + 1}</td>
+              <td className="py-2 pr-4 font-mono text-blue-400">{p.from_account?.slice(0, 8)}...{p.from_account?.slice(-4)}</td>
+              <td className="py-2 pr-4 font-mono text-purple-400">{p.to_account?.slice(0, 8)}...{p.to_account?.slice(-4)}</td>
+              <td className="py-2 pr-4 font-mono text-emerald-400">
+                {p.volume_xrp >= 1000 ? `${(p.volume_xrp/1000).toFixed(2)}K` : p.volume_xrp.toFixed(2)}
+              </td>
+              <td className="py-2 text-slate-400">{p.tx_count.toLocaleString()}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }
 
-export default function Analytics({ transactions }) {
-  // Refresh chart data every 30 seconds only
-  const [refreshTick, setRefreshTick] = useState(0)
-  const [countdown, setCountdown] = useState(30)
-  useEffect(() => {
-    const tick = setInterval(() => setRefreshTick(t => t + 1), 30000)
-    const cd = setInterval(() => setCountdown(c => c <= 1 ? 30 : c - 1), 1000)
-    return () => { clearInterval(tick); clearInterval(cd) }
-  }, [])
+// ── Top anomalous accounts ────────────────────────────────────────────────────
 
-  const dailyData = useMemo(() => generateDailyVolumeData(), [refreshTick])
-  const heatmapData = useMemo(() => generateHeatmapData(), [refreshTick])
-  const bollingerData = useMemo(() => generateBollingerData(), [refreshTick])
-  const topPairs = useMemo(() => getTopWalletPairs(), [refreshTick])
-  const radarData = useMemo(() => computeRadarData(HISTORICAL_TRANSACTIONS), [refreshTick])
+function TopAccountsTable({ data, loading }) {
+  if (loading) return <Skeleton h={180} />
+  const accounts = data?.accounts ?? []
+  if (!accounts.length) return <p className="text-slate-600 text-sm text-center py-8">No data</p>
 
-  // Summary stats
-  const totalVolume = dailyData.reduce((s, d) => s + d.normalVolume + d.anomalousVolume, 0)
-  const peakDay = dailyData.reduce((max, d) => (d.normalVolume + d.anomalousVolume) > (max.normalVolume + max.anomalousVolume) ? d : max, dailyData[0] || {})
-  const avgDailyTx = dailyData.length > 0
-    ? Math.round(dailyData.reduce((s, d) => s + d.totalTx, 0) / dailyData.length)
-    : 0
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="border-b border-[#2a3045]">
+            {['Address', 'Tx Count', 'Anomalies', 'IF Score'].map(h => (
+              <th key={h} className="text-left text-[10px] text-slate-600 uppercase tracking-wider font-semibold pb-2 pr-4">{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {accounts.slice(0, 10).map((acc, i) => {
+            const score = acc.isolation_score ?? 0
+            const color = score >= 0.7 ? '#f87171' : score >= 0.4 ? '#fbbf24' : '#34d399'
+            return (
+              <tr key={i} className="border-b border-[#2a3045]/40 hover:bg-[#242938] transition-colors">
+                <td className="py-2 pr-4 font-mono text-blue-400">{acc.address?.slice(0, 10)}...{acc.address?.slice(-4)}</td>
+                <td className="py-2 pr-4 text-slate-400">{(acc.tx_count ?? 0).toLocaleString()}</td>
+                <td className="py-2 pr-4 text-red-400">{acc.anomaly_count ?? 0}</td>
+                <td className="py-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-16 h-1.5 bg-[#0a0e1a] rounded-full overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: `${Math.round(score * 100)}%`, background: color }} />
+                    </div>
+                    <span className="font-mono text-[10px]" style={{ color }}>{score.toFixed(3)}</span>
+                  </div>
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+// ── Tx type bar chart ─────────────────────────────────────────────────────────
+
+function TxTypeBar({ data, loading }) {
+  if (loading) return <Skeleton />
+  const types = data?.types ?? []
+  if (!types.length) return null
+
+  const chartData = types.slice(0, 10).map((t, i) => ({
+    type: t.tx_type ?? 'Unknown',
+    count: t.count,
+    pct: t.percentage,
+    fill: CHART_COLORS[i % CHART_COLORS.length],
+  }))
+
+  const chartHeight = chartData.length * 36 + 20
+
+  return (
+    <ResponsiveContainer width="100%" height={chartHeight}>
+      <BarChart data={chartData} layout="vertical" barSize={18} margin={{ top: 0, right: 16, bottom: 0, left: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#1a2035" horizontal={false} />
+        <XAxis type="number" tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false}
+          tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} />
+        <YAxis type="category" dataKey="type" tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} width={110} />
+        <Tooltip content={<CustomTooltip formatter={v => `${(+v).toLocaleString()} txns`} />} />
+        <Bar dataKey="count" name="Count" radius={[0, 3, 3, 0]}>
+          {chartData.map((entry, i) => (
+            <Cell key={i} fill={entry.fill} />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  )
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
+
+const TIME_WINDOWS = ['1h', '6h', '24h', '7d']
+
+export default function Analytics() {
+  const [timeWindow, setTimeWindow] = useState('24h')
+
+  const { data: volumeData, loading: volumeLoading } = useVolume(timeWindow)
+  const { data: topAccountsData, loading: topAccountsLoading } = useTopAccounts()
+  const { data: txTypesData, loading: txTypesLoading } = useTxTypes()
+  const { data: walletPairsData, loading: walletPairsLoading } = useWalletPairs(10)
+  const { data: volumeSeriesData, loading: volumeSeriesLoading } = useVolumeSeries()
 
   return (
     <div className="space-y-6">
-      {/* Refresh indicator */}
-      <div className="flex items-center justify-end gap-2 text-xs text-slate-600 -mb-2">
-        <div className="w-1.5 h-1.5 rounded-full bg-blue-500/50 animate-pulse" />
-        Charts refresh in <span className="font-mono text-slate-400">{countdown}s</span>
+      {/* Time window selector */}
+      <div className="flex items-center gap-2">
+        <Clock className="w-4 h-4 text-slate-500" />
+        <span className="text-xs text-slate-500">Window:</span>
+        <div className="flex gap-1">
+          {TIME_WINDOWS.map(w => (
+            <button key={w} onClick={() => setTimeWindow(w)}
+              className={`px-2.5 py-1 rounded text-xs font-medium uppercase transition-colors ${
+                timeWindow === w ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+              }`}>
+              {w}
+            </button>
+          ))}
+        </div>
+        <span className="ml-auto text-[10px] text-blue-400 font-mono">All data from backend · real XRPL transactions</span>
       </div>
 
-      {/* Summary stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {[
-          { label: '7-Day Volume', value: `${(totalVolume / 1000).toFixed(2)}K`, sub: 'RLUSD', icon: '📊' },
-          { label: 'Peak Day', value: peakDay.date || '-', sub: `${((peakDay.normalVolume || 0) + (peakDay.anomalousVolume || 0)).toFixed(0)} RLUSD`, icon: '📈' },
-          { label: 'Avg Daily Txns', value: avgDailyTx, sub: 'transactions/day', icon: '⚡' },
-          { label: 'Anomaly Volume', value: `${dailyData.reduce((s, d) => s + d.anomalousVolume, 0).toFixed(0)}`, sub: 'RLUSD flagged', icon: '⚠️' },
-        ].map(stat => (
-          <motion.div
-            key={stat.label}
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-[#1a1f2e] border border-[#2a3045] rounded-xl p-4 flex items-center gap-3"
-          >
-            <div className="text-2xl">{stat.icon}</div>
-            <div>
-              <div className="text-lg font-bold text-slate-100 font-mono">{stat.value}</div>
-              <div className="text-xs text-slate-500">{stat.label}</div>
-              <div className="text-[10px] text-slate-600">{stat.sub}</div>
-            </div>
-          </motion.div>
-        ))}
-      </div>
+      {/* Volume summary cards */}
+      {volumeData && <VolumeSummaryCards data={volumeData} />}
 
-      {/* Charts row 1 */}
+      {/* Volume chart */}
+      <Card>
+        <CardHeader icon={TrendingUp} title="Volume Over Time (Raw vs Adjusted)" badge={timeWindow} />
+        <VolumeChart data={volumeData} loading={volumeLoading} />
+      </Card>
+
+      {/* Two charts: tx type radar + tx type bar */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <VolumeBarChart data={dailyData} />
-        <TxTypeRadarChart data={radarData} />
+        <Card>
+          <CardHeader icon={Activity} title="Transaction Type Distribution" iconColor="text-purple-400" />
+          <TxTypeRadar data={txTypesData} loading={txTypesLoading} />
+        </Card>
+        <Card>
+          <CardHeader icon={BarChart2} title="Transaction Type Counts" iconColor="text-blue-400" />
+          <TxTypeBar data={txTypesData} loading={txTypesLoading} />
+        </Card>
       </div>
 
-      {/* Heatmap - full width */}
-      <HeatmapGrid data={heatmapData} />
+      {/* Bollinger band volume series */}
+      <Card>
+        <CardHeader icon={TrendingUp} title="Volume Spike Detection — Bollinger Bands (per minute)" iconColor="text-emerald-400"
+          badge={`${volumeSeriesData?.points?.filter(p => p.is_spike).length ?? 0} spikes`} />
+        <BollingerChart data={volumeSeriesData} loading={volumeSeriesLoading} />
+      </Card>
 
-      {/* Charts row 2 */}
+      {/* Wallet pairs + top accounts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <BollingerChart data={bollingerData} />
-        <AgentPairsTable pairs={topPairs} />
+        <Card>
+          <CardHeader icon={Users} title="Top Wallet Pairs by Transaction Count" iconColor="text-yellow-400" />
+          <WalletPairsTable data={walletPairsData} loading={walletPairsLoading} />
+        </Card>
+        <Card>
+          <CardHeader icon={Users} title="Top Accounts — Isolation Forest Score" iconColor="text-red-400" />
+          <TopAccountsTable data={topAccountsData} loading={topAccountsLoading} />
+        </Card>
       </div>
     </div>
   )
