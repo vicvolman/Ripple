@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>XRPL Analytics — Group 4 Pitch</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0a0e1a;
+    --surface:  #1a1f2e;
+    --border:   #2a3045;
+    --blue:     #3b82f6;
+    --cyan:     #06b6d4;
+    --purple:   #8b5cf6;
+    --emerald:  #10b981;
+    --amber:    #f59e0b;
+    --red:      #ef4444;
+    --slate4:   #94a3b8;
+    --slate5:   #64748b;
+    --white:    #f1f5f9;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--white);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    height: 100vh;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  /* ── Slide container ── */
+  .deck { width: 100vw; height: 100vh; position: relative; }
+
+  .slide {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    padding: 56px 72px;
+    opacity: 0; pointer-events: none;
+    transition: opacity .4s ease, transform .4s ease;
+    transform: translateX(40px);
+  }
+  .slide.active {
+    opacity: 1; pointer-events: all;
+    transform: translateX(0);
+  }
+  .slide.out {
+    opacity: 0; transform: translateX(-40px);
+  }
+
+  /* ── Progress bar ── */
+  #progress-bar {
+    position: fixed; top: 0; left: 0; height: 3px;
+    background: linear-gradient(90deg, var(--blue), var(--cyan));
+    transition: width .4s ease;
+    z-index: 100;
+  }
+
+  /* ── Slide counter ── */
+  #counter {
+    position: fixed; bottom: 20px; right: 28px;
+    font-size: 11px; color: var(--slate5); font-variant-numeric: tabular-nums;
+    z-index: 100;
+  }
+
+  /* ── Speaker label ── */
+  .speaker-tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+    padding: 4px 10px; border-radius: 999px; border: 1px solid;
+    margin-bottom: 20px; width: fit-content;
+  }
+  .p1 { color: var(--cyan);    border-color: var(--cyan);    background: #06b6d410; }
+  .p2 { color: var(--blue);    border-color: var(--blue);    background: #3b82f610; }
+  .p3 { color: var(--purple);  border-color: var(--purple);  background: #8b5cf610; }
+  .p4 { color: var(--emerald); border-color: var(--emerald); background: #10b98110; }
+  .all { color: var(--amber);  border-color: var(--amber);   background: #f59e0b10; }
+
+  /* ── Typography ── */
+  .eyebrow {
+    font-size: 11px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--slate5); margin-bottom: 10px;
+  }
+  h1 {
+    font-size: 52px; font-weight: 800; line-height: 1.08;
+    background: linear-gradient(135deg, #fff 30%, var(--cyan));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    margin-bottom: 16px;
+  }
+  h2 {
+    font-size: 36px; font-weight: 700; line-height: 1.15;
+    color: var(--white); margin-bottom: 20px;
+  }
+  .sub {
+    font-size: 18px; color: var(--slate4); line-height: 1.6; max-width: 680px;
+  }
+  .quote {
+    font-size: 22px; line-height: 1.65; color: var(--slate4);
+    border-left: 3px solid var(--blue); padding-left: 24px;
+    max-width: 800px;
+  }
+  .quote em { color: var(--white); font-style: normal; font-weight: 600; }
+
+  /* ── Cards / grid ── */
+  .grid { display: grid; gap: 16px; margin-top: 8px; }
+  .grid-2 { grid-template-columns: 1fr 1fr; }
+  .grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .grid-4 { grid-template-columns: repeat(4, 1fr); }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 22px 24px;
+  }
+  .card-icon {
+    font-size: 28px; margin-bottom: 10px;
+  }
+  .card h3 { font-size: 14px; font-weight: 700; color: var(--white); margin-bottom: 6px; }
+  .card p  { font-size: 13px; color: var(--slate4); line-height: 1.55; }
+
+  /* ── Stat pills ── */
+  .stat-pill {
+    display: flex; flex-direction: column; align-items: center;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 20px 16px; text-align: center;
+  }
+  .stat-pill .num {
+    font-size: 34px; font-weight: 800; font-variant-numeric: tabular-nums;
+    background: linear-gradient(135deg, var(--white), var(--cyan));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .stat-pill .lbl { font-size: 11px; color: var(--slate5); margin-top: 4px; text-transform: uppercase; letter-spacing: .08em; }
+
+  /* ── Feature list ── */
+  .feat-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  .feat-list li {
+    display: flex; align-items: flex-start; gap: 12px;
+    font-size: 15px; color: var(--slate4); line-height: 1.5;
+  }
+  .feat-list li .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--blue); flex-shrink: 0; margin-top: 7px;
+  }
+  .feat-list li strong { color: var(--white); }
+
+  /* ── Anomaly badges ── */
+  .badge-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+  .badge {
+    font-size: 12px; font-weight: 700; padding: 6px 14px; border-radius: 8px; border: 1px solid;
+  }
+  .b-red    { background: #ef444415; color: #fca5a5; border-color: #ef444430; }
+  .b-purple { background: #8b5cf615; color: #c4b5fd; border-color: #8b5cf630; }
+  .b-amber  { background: #f59e0b15; color: #fcd34d; border-color: #f59e0b30; }
+  .b-cyan   { background: #06b6d415; color: #67e8f9; border-color: #06b6d430; }
+  .b-blue   { background: #3b82f615; color: #93c5fd; border-color: #3b82f630; }
+
+  /* ── Pipeline flow ── */
+  .pipeline {
+    display: flex; align-items: center; gap: 0; margin-top: 24px;
+  }
+  .pipe-step {
+    flex: 1; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px 16px; text-align: center;
+  }
+  .pipe-step .icon { font-size: 26px; margin-bottom: 8px; }
+  .pipe-step h3 { font-size: 13px; font-weight: 700; color: var(--white); margin-bottom: 4px; }
+  .pipe-step p  { font-size: 11px; color: var(--slate5); line-height: 1.45; }
+  .pipe-arrow {
+    font-size: 20px; color: var(--border); padding: 0 6px; flex-shrink: 0;
+  }
+
+  /* ── Impact table ── */
+  .impact-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px; }
+  .impact-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    padding: 18px 20px; display: flex; gap: 14px; align-items: flex-start;
+  }
+  .impact-card .ico { font-size: 24px; flex-shrink: 0; }
+  .impact-card h3 { font-size: 13px; font-weight: 700; color: var(--white); margin-bottom: 4px; }
+  .impact-card p  { font-size: 12px; color: var(--slate4); line-height: 1.5; }
+
+  /* ── Title slide decoration ── */
+  .orb {
+    position: absolute; border-radius: 50%; filter: blur(100px); pointer-events: none;
+  }
+  .orb1 { width: 420px; height: 420px; background: #3b82f620; top: -100px; right: -80px; }
+  .orb2 { width: 300px; height: 300px; background: #8b5cf618; bottom: 40px; left: 100px; }
+
+  /* ── Nav hint ── */
+  #nav-hint {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    font-size: 11px; color: var(--slate5); z-index: 100;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .key {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 5px; padding: 2px 7px; font-family: monospace; font-size: 11px;
+  }
+
+  /* ── Metric highlight ── */
+  .metric { color: var(--cyan); font-weight: 700; }
+  .hl-red    { color: #fca5a5; }
+  .hl-purple { color: #c4b5fd; }
+  .hl-amber  { color: #fcd34d; }
+  .hl-green  { color: #6ee7b7; }
+</style>
+</head>
+<body>
+
+<div id="progress-bar"></div>
+<div id="counter"></div>
+<div id="nav-hint">
+  <span class="key">←</span> <span class="key">→</span> to navigate &nbsp;·&nbsp; <span class="key">F</span> fullscreen
+</div>
+
+<div class="deck">
+
+  <!-- ───────────────── SLIDE 1 — Title ───────────────── -->
+  <div class="slide active" id="s0">
+    <div class="orb orb1"></div>
+    <div class="orb orb2"></div>
+    <div style="margin-top: auto; margin-bottom: auto;">
+      <div class="eyebrow">Group 4 · 5-Minute Pitch</div>
+      <h1>XRPL Real-Time<br>Analytics Dashboard</h1>
+      <p class="sub">
+        Detecting wash trading, sandwich attacks, and on-chain fraud<br>
+        on the XRP Ledger — in real time, using machine learning.
+      </p>
+      <div style="display:flex; gap:10px; margin-top:32px;">
+        <span class="badge b-cyan">Live WebSocket Feed</span>
+        <span class="badge b-blue">ML Anomaly Detection</span>
+        <span class="badge b-purple">271,990 Transactions</span>
+        <span class="badge b-amber">834 Anomalies Flagged</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────────────── SLIDE 2 — Problem ───────────────── -->
+  <div class="slide" id="s1">
+    <div class="speaker-tag p1">Person 1 — Hook &amp; Problem</div>
+    <h2>The XRP Ledger moves fast.<br>Fraud moves faster.</h2>
+    <p class="quote" style="margin-bottom:28px;">
+      "The XRP Ledger settles <em>millions of transactions per day</em> — trustless, borderless, in seconds.
+      But with that scale comes a real risk: <em class='hl-red'>wash trading</em>,
+      <em class='hl-amber'>sandwich attacks</em>, and escrow manipulation are
+      growing threats that are <em>nearly invisible without the right tools.</em>"
+    </p>
+    <div class="grid grid-3">
+      <div class="card">
+        <div class="card-icon">🥪</div>
+        <h3>Sandwich Attacks</h3>
+        <p>Front-running victim trades on the DEX — attacker places orders before and after to extract profit.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">🔄</div>
+        <h3>Wash Trading</h3>
+        <p>Coordinated transfers between linked wallets to fake volume and manipulate market perception.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">🔒</div>
+        <h3>Escrow Manipulation</h3>
+        <p>Abnormally large escrow amounts used to temporarily lock funds and distort liquidity signals.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────────────── SLIDE 3 — Our Answer ───────────────── -->
+  <div class="slide" id="s2">
+    <div class="speaker-tag p1">Person 1 — Our Answer</div>
+    <h2>Can we detect fraud on a live blockchain — in real time?</h2>
+    <p class="sub" style="margin-bottom:32px;">
+      We built a full analytics platform that streams live XRPL transactions, classifies them,
+      and flags anomalies as they happen — no delay, no manual review.
+    </p>
+    <div class="grid grid-4">
+      <div class="stat-pill">
+        <div class="num">271K</div>
+        <div class="lbl">Transactions analysed</div>
+      </div>
+      <div class="stat-pill">
+        <div class="num">834</div>
+        <div class="lbl">Anomalies detected</div>
+      </div>
+      <div class="stat-pill">
+        <div class="num">96.3%</div>
+        <div class="lbl">Classifier accuracy</div>
+      </div>
+      <div class="stat-pill">
+        <div class="num">&lt;1s</div>
+        <div class="lbl">Detection latency</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────────────── SLIDE 4 — Data Pipeline ───────────────── -->
+  <div class="slide" id="s3">
+    <div class="speaker-tag p2">Person 2 — Data Pipeline</div>
+    <h2>Everything starts with a live WebSocket connection.</h2>
+    <div class="pipeline">
+      <div class="pipe-step">
+        <div class="icon">🌐</div>
+        <h3>XRPL WebSocket</h3>
+        <p>Live transaction stream from mainnet consensus nodes</p>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step">
+        <div class="icon">🗄️</div>
+        <h3>Historical Baseline</h3>
+        <p>Mean, std dev, 95th &amp; 99th percentile, address velocity</p>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step">
+        <div class="icon">⚙️</div>
+        <h3>Feature Extraction</h3>
+        <p>8 features per transaction, extracted in real time</p>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step">
+        <div class="icon">🤖</div>
+        <h3>ML Classification</h3>
+        <p>Random Forest + Isolation Forest scoring</p>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step">
+        <div class="icon">📊</div>
+        <h3>Dashboard</h3>
+        <p>Live feed, KPIs, anomaly panel, analytics</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────────────── SLIDE 5 — Feature Engineering ───────────────── -->
+  <div class="slide" id="s4">
+    <div class="speaker-tag p2">Person 2 — Feature Engineering</div>
+    <h2>8 features extracted per transaction</h2>
+    <div class="grid grid-2" style="margin-top:8px;">
+      <ul class="feat-list">
+        <li><span class="dot"></span><div><strong>Log-normalised amount</strong> — compresses heavy-tailed XRP distribution</div></li>
+        <li><span class="dot"></span><div><strong>Z-score vs baseline</strong> — how far this amount is from the historical mean</div></li>
+        <li><span class="dot"></span><div><strong>Address velocity</strong> — transactions per address per minute</div></li>
+        <li><span class="dot"></span><div><strong>Transaction type encoding</strong> — Payment, Offer, Escrow, NFT, AMM…</div></li>
+      </ul>
+      <ul class="feat-list">
+        <li><span class="dot"></span><div><strong>Time-of-day (sin/cos)</strong> — cyclic encoding of ledger close time</div></li>
+        <li><span class="dot"></span><div><strong>Destination frequency</strong> — how often this address appears as a receiver</div></li>
+        <li><span class="dot"></span><div><strong>Amount percentile rank</strong> — position in the historical distribution</div></li>
+        <li><span class="dot"></span><div><strong>Asset pair</strong> — DEX trading pair for offer transactions</div></li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ───────────────── SLIDE 6 — ML Models ───────────────── -->
+  <div class="slide" id="s5">
+    <div class="speaker-tag p3">Person 3 — ML Models</div>
+    <h2>Two models, two roles.</h2>
+    <div class="grid grid-2" style="margin-top: 8px;">
+      <div class="card" style="border-color: #3b82f640;">
+        <div class="card-icon">🌲</div>
+        <h3 style="font-size:16px; color: var(--blue);">Random Forest Classifier</h3>
+        <p style="margin-bottom:16px;">Classifies each transaction type with confidence scores.</p>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <div style="display:flex; justify-content:space-between; font-size:13px;">
+            <span style="color:var(--slate4);">Accuracy</span>
+            <span class="metric">96.3%</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; font-size:13px;">
+            <span style="color:var(--slate4);">Precision</span>
+            <span class="metric">94.8%</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; font-size:13px;">
+            <span style="color:var(--slate4);">Recall</span>
+            <span class="metric">97.1%</span>
+          </div>
+        </div>
+      </div>
+      <div class="card" style="border-color: #8b5cf640;">
+        <div class="card-icon">🔍</div>
+        <h3 style="font-size:16px; color: var(--purple);">Isolation Forest</h3>
+        <p style="margin-bottom:16px;">Unsupervised anomaly scorer — no labelled data needed. Scores 0→1, threshold at <strong style="color:var(--purple);">0.65</strong>.</p>
+        <p style="font-size:13px; color:var(--slate4);">
+          Isolates anomalies by building random trees. Outliers require fewer splits — so they get higher anomaly scores automatically.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────────────── SLIDE 7 — Anomaly Types ───────────────── -->
+  <div class="slide" id="s6">
+    <div class="speaker-tag p3">Person 3 — Anomaly Detection</div>
+    <h2>Four live patterns + three DeFi fraud types</h2>
+    <div style="margin-bottom:20px;">
+      <p style="font-size:13px; color:var(--slate5); margin-bottom:10px; text-transform:uppercase; letter-spacing:.1em;">Real-time heuristics</p>
+      <div class="badge-row">
+        <span class="badge b-cyan">📈 Volume Spike — 3σ above mean</span>
+        <span class="badge b-amber">⚡ Rapid-fire — 10+ txns/min same address</span>
+        <span class="badge b-blue">🔁 Circular Transfer — rare high-value destination</span>
+        <span class="badge b-purple">🔒 Escrow Manipulation — abnormal escrow size</span>
+      </div>
+    </div>
+    <div>
+      <p style="font-size:13px; color:var(--slate5); margin-bottom:10px; text-transform:uppercase; letter-spacing:.1em;">DeFi fraud detection (graph + heuristic)</p>
+      <div class="badge-row">
+        <span class="badge b-red">🥪 Sandwich Attack — 832 detected</span>
+        <span class="badge b-purple">🔄 Wash Trade — graph-based cluster analysis</span>
+        <span class="badge b-amber">🛣️ Pathfinder Inflation — route manipulation</span>
+      </div>
+    </div>
+    <div class="grid grid-3" style="margin-top:20px;">
+      <div class="card" style="padding:14px 16px;">
+        <h3 style="color:var(--emerald);">LOW</h3>
+        <p>Score 0.50–0.65 · informational flag</p>
+      </div>
+      <div class="card" style="padding:14px 16px;">
+        <h3 style="color:var(--amber);">MEDIUM</h3>
+        <p>Score 0.65–0.85 · review recommended</p>
+      </div>
+      <div class="card" style="padding:14px 16px;">
+        <h3 style="color:var(--red);">HIGH</h3>
+        <p>Score &gt;0.85 · immediate alert</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────────────── SLIDE 8 — Dashboard Demo ───────────────── -->
+  <div class="slide" id="s7">
+    <div class="speaker-tag p4">Person 4 — Dashboard</div>
+    <h2>All of this surfaces in an interactive dashboard.</h2>
+    <div class="grid grid-2" style="margin-top:8px;">
+      <ul class="feat-list">
+        <li><span class="dot" style="background:var(--cyan)"></span>
+          <div><strong>Live Feed</strong> — confirmed transactions stream in real time with ML labels, anomaly flags, and currency badges</div></li>
+        <li><span class="dot" style="background:var(--blue)"></span>
+          <div><strong>KPI Cards</strong> — total volume, active addresses, sandwich count, wash trade clusters</div></li>
+        <li><span class="dot" style="background:var(--red)"></span>
+          <div><strong>Detected Anomalies</strong> — real backend records with attacker address, type badge, and confidence bar</div></li>
+        <li><span class="dot" style="background:var(--amber)"></span>
+          <div><strong>Large Transactions</strong> — live z-score panel flagging payments &gt;3σ above the rolling mean</div></li>
+      </ul>
+      <ul class="feat-list">
+        <li><span class="dot" style="background:var(--purple)"></span>
+          <div><strong>Analytics Tab</strong> — volume over time (XRP), tx type distribution, fee stats, wallet pairs</div></li>
+        <li><span class="dot" style="background:var(--emerald)"></span>
+          <div><strong>Anomalies Tab</strong> — confidence score histogram across all 834 flags, filterable by type</div></li>
+        <li><span class="dot" style="background:var(--cyan)"></span>
+          <div><strong>Address Explorer</strong> — drill into any wallet's full transaction history</div></li>
+        <li><span class="dot" style="background:var(--blue)"></span>
+          <div><strong>Payment Flow</strong> — animated XRPL consensus diagram with real avg fee + settlement time</div></li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ───────────────── SLIDE 9 — Impact ───────────────── -->
+  <div class="slide" id="s8">
+    <div class="speaker-tag p4">Person 4 — Impact &amp; Close</div>
+    <h2>Real-time fraud detection — in milliseconds, not hours.</h2>
+    <div class="impact-grid">
+      <div class="impact-card">
+        <div class="ico">🏦</div>
+        <div>
+          <h3>Exchanges &amp; Custodians</h3>
+          <p>Flag suspicious deposit/withdrawal patterns before funds move off-platform.</p>
+        </div>
+      </div>
+      <div class="impact-card">
+        <div class="ico">⚖️</div>
+        <div>
+          <h3>Compliance Teams</h3>
+          <p>Automated audit trail of every flagged wallet — exportable, explainable, auditable.</p>
+        </div>
+      </div>
+      <div class="impact-card">
+        <div class="ico">📡</div>
+        <div>
+          <h3>DeFi Protocols</h3>
+          <p>Detect sandwich bots and wash traders in real time; protect liquidity providers.</p>
+        </div>
+      </div>
+      <div class="impact-card">
+        <div class="ico">🔬</div>
+        <div>
+          <h3>Researchers</h3>
+          <p>Open data pipeline — replay any ledger range, tune detection thresholds, extend models.</p>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:28px; text-align:center;">
+      <p style="font-size:20px; color:var(--slate4); line-height:1.6;">
+        We built this in days. Imagine what it looks like at production scale.<br>
+        <span style="color:var(--white); font-weight:700;">Thank you.</span>
+      </p>
+    </div>
+  </div>
+
+</div><!-- /deck -->
+
+<script>
+  const slides = Array.from(document.querySelectorAll('.slide'))
+  let cur = 0
+
+  function go(n) {
+    const prev = cur
+    cur = Math.max(0, Math.min(slides.length - 1, n))
+    if (cur === prev) return
+    slides[prev].classList.remove('active')
+    slides[prev].classList.add('out')
+    setTimeout(() => slides[prev].classList.remove('out'), 420)
+    slides[cur].classList.add('active')
+    update()
+  }
+
+  function update() {
+    document.getElementById('progress-bar').style.width =
+      `${((cur + 1) / slides.length) * 100}%`
+    document.getElementById('counter').textContent =
+      `${cur + 1} / ${slides.length}`
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') go(cur + 1)
+    if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')                     go(cur - 1)
+    if (e.key === 'f' || e.key === 'F') document.documentElement.requestFullscreen?.()
+    if (e.key === 'Home') go(0)
+    if (e.key === 'End')  go(slides.length - 1)
+  })
+
+  // Touch/swipe
+  let tx = 0
+  document.addEventListener('touchstart', e => { tx = e.touches[0].clientX }, { passive: true })
+  document.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - tx
+    if (Math.abs(dx) > 50) go(dx < 0 ? cur + 1 : cur - 1)
+  }, { passive: true })
+
+  // Click right half = next, left half = prev
+  document.querySelector('.deck').addEventListener('click', e => {
+    e.clientX > window.innerWidth / 2 ? go(cur + 1) : go(cur - 1)
+  })
+
+  update()
+</script>
+</body>
+</html>
