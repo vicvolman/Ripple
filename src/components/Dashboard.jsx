@@ -1,14 +1,14 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { useState, useEffect, useRef, useMemo } from 'react'
+import { motion } from 'framer-motion'
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer
 } from 'recharts'
 import {
   Activity, AlertTriangle, Wallet, DollarSign,
-  X, Shield, ArrowRightLeft, Database, Layers
+  X, Shield, ArrowRightLeft, Database, Layers, TrendingUp
 } from 'lucide-react'
 import LiveFeed from './LiveFeed.jsx'
-import { useStats, useTopAccounts, useFeeStats } from '../hooks/useAPI.js'
+import { useStats, useTopAccounts, useFeeStats, useAnomalies } from '../hooks/useAPI.js'
 
 // Animated counter hook
 function useAnimatedCounter(value, duration = 800) {
@@ -73,71 +73,124 @@ function StatCard({ icon: Icon, label, value, subValue, color, suffix = '', tren
   )
 }
 
-// Anomaly alert card
-function AnomalyAlert({ anomaly, onDismiss }) {
-  const [dismissing, setDismissing] = useState(false)
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDismissing(true)
-      setTimeout(() => onDismiss?.(anomaly.id || anomaly.hash), 400)
-    }, 10000)
-    return () => clearTimeout(timer)
-  }, [])
-
-  const handleDismiss = () => {
-    setDismissing(true)
-    setTimeout(() => onDismiss?.(anomaly.id || anomaly.hash), 400)
-  }
-
-  const severity = anomaly.severity || (anomaly.anomalyScore > 0.85 ? 'HIGH' : 'MEDIUM')
+// Backend anomalies panel — real data from /api/anomalies
+function BackendAnomaliesPanel() {
+  const { data, loading } = useAnomalies({})
+  const items = (data?.items ?? []).slice(0, 8)
 
   return (
-    <motion.div
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: dismissing ? 0 : 1, x: dismissing ? 100 : 0 }}
-      transition={{ duration: 0.35 }}
-      className={`p-3 rounded-lg border flex items-start gap-3 ${
-        severity === 'HIGH'
-          ? 'bg-red-500/10 border-red-500/30'
-          : 'bg-yellow-500/10 border-yellow-500/30'
-      }`}
-    >
-      <AlertTriangle className={`w-4 h-4 mt-0.5 shrink-0 ${severity === 'HIGH' ? 'text-red-400' : 'text-yellow-400'}`} />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
-          <span className={`text-xs font-bold px-2 py-0.5 rounded ${
-            severity === 'HIGH'
-              ? 'bg-red-500/20 text-red-300'
-              : 'bg-yellow-500/20 text-yellow-300'
-          }`}>
-            {severity}
-          </span>
-          <span className="text-xs text-slate-400 font-mono">
-            {(anomaly.anomalyScore || anomaly.score || anomaly.confidence || 0).toFixed(3)}
-          </span>
-          {(anomaly.anomalyType || anomaly.type) && (
-            <span className="text-[10px] text-slate-500 uppercase">
-              {(anomaly.anomalyType || anomaly.type || '').replace(/_/g, ' ')}
-            </span>
-          )}
-        </div>
-        <p className="text-xs text-slate-300 leading-relaxed truncate">
-          {anomaly.reason || anomaly.description || `Anomalous ${anomaly.type || 'activity'} detected`}
-        </p>
-        {anomaly.amount && (
-          <div className="text-[10px] text-slate-500 mt-1 font-mono">
-            Amount: {parseFloat(anomaly.amount).toFixed(3)} {anomaly.currency || 'RLUSD'}
-          </div>
-        )}
+    <div className="bg-[#1a1f2e] border border-[#2a3045] rounded-xl p-4 h-full flex flex-col">
+      <div className="flex items-center gap-2 mb-3">
+        <AlertTriangle className="w-4 h-4 text-red-400" />
+        <span className="text-sm font-semibold text-slate-200">Detected Anomalies</span>
+        <span className="ml-auto text-[10px] text-blue-400 font-mono">Backend · real data</span>
       </div>
-      <button
-        onClick={handleDismiss}
-        className="text-slate-600 hover:text-slate-400 transition-colors shrink-0"
-      >
-        <X className="w-4 h-4" />
-      </button>
-    </motion.div>
+
+      {loading && (
+        <div className="flex-1 flex items-center justify-center text-slate-600 text-sm animate-pulse">
+          Loading...
+        </div>
+      )}
+
+      {!loading && items.length === 0 && (
+        <div className="flex-1 flex flex-col items-center justify-center">
+          <Shield className="w-8 h-8 text-emerald-500/40 mx-auto mb-2" />
+          <p className="text-sm text-slate-600">No anomalies found</p>
+        </div>
+      )}
+
+      <div className="space-y-2 overflow-y-auto max-h-[280px]">
+        {items.map((item, i) => {
+          const confidence = item.confidence_score ?? item.confidence ?? 0
+          const attacker = item.attacker_address ?? item.address ?? ''
+          const type = item.anomaly_type ?? item.type ?? ''
+          const severity = confidence >= 0.85 ? 'HIGH' : 'MEDIUM'
+          const typeCfg = {
+            'sandwich':   { cls: 'bg-red-500/20 text-red-300 border-red-500/30',    label: 'Sandwich' },
+            'wash_trade': { cls: 'bg-purple-500/20 text-purple-300 border-purple-500/30', label: 'Wash Trade' },
+          }
+          const { cls: badgeCls, label: badgeLabel } = typeCfg[type] ?? { cls: 'bg-slate-500/20 text-slate-300 border-slate-500/30', label: type || 'Unknown' }
+          return (
+            <div key={item.id ?? i} className="flex items-center gap-2 py-1.5 border-b border-[#2a3045]/50 last:border-0">
+              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border shrink-0 ${badgeCls}`}>
+                {badgeLabel}
+              </span>
+              <span className="text-[11px] font-mono text-slate-400 truncate flex-1">
+                {attacker ? `${attacker.slice(0, 10)}…${attacker.slice(-4)}` : '—'}
+              </span>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <div className="w-14 h-1.5 bg-[#0a0e1a] rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${severity === 'HIGH' ? 'bg-red-500' : 'bg-amber-400'}`}
+                    style={{ width: `${Math.round(confidence * 100)}%` }}
+                  />
+                </div>
+                <span className="text-[10px] font-mono text-slate-500 w-7 text-right">
+                  {Math.round(confidence * 100)}%
+                </span>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// Live large-transaction spotter — z-score > 3 on live WebSocket feed
+function VolumeSpikePanel({ transactions }) {
+  const spikes = useMemo(() => {
+    const xrpTxs = (transactions ?? []).filter(t => t.amount != null && t.currency === 'XRP' && t.amount > 0)
+    if (xrpTxs.length < 5) return []
+    const amounts = xrpTxs.map(t => t.amount)
+    const mean = amounts.reduce((s, v) => s + v, 0) / amounts.length
+    const std = Math.sqrt(amounts.reduce((s, v) => s + (v - mean) ** 2, 0) / amounts.length)
+    if (std === 0) return []
+    return xrpTxs
+      .map(t => ({ ...t, sigma: (t.amount - mean) / std }))
+      .filter(t => t.sigma > 3)
+      .sort((a, b) => b.sigma - a.sigma)
+      .slice(0, 8)
+  }, [transactions])
+
+  function fmt(n) {
+    if (n >= 1e6) return `${(n / 1e6).toFixed(2)}M`
+    if (n >= 1e3) return `${(n / 1e3).toFixed(2)}K`
+    return n.toFixed(2)
+  }
+
+  return (
+    <div className="bg-[#1a1f2e] border border-[#2a3045] rounded-xl p-4 h-full flex flex-col">
+      <div className="flex items-center gap-2 mb-3">
+        <TrendingUp className="w-4 h-4 text-amber-400" />
+        <span className="text-sm font-semibold text-slate-200">Large Transactions</span>
+        <span className="ml-auto text-[10px] text-slate-500 font-mono">Live · &gt;3σ from mean</span>
+      </div>
+
+      {spikes.length === 0 ? (
+        <div className="flex-1 flex flex-col items-center justify-center">
+          <TrendingUp className="w-8 h-8 text-slate-700 mx-auto mb-2" />
+          <p className="text-sm text-slate-600">No large transactions yet</p>
+          <p className="text-xs text-slate-700 mt-1">Waiting for live data…</p>
+        </div>
+      ) : (
+        <div className="space-y-2 overflow-y-auto max-h-[280px]">
+          {spikes.map((tx, i) => (
+            <div key={tx.id ?? tx.hash ?? i} className="flex items-center gap-2 py-1.5 border-b border-[#2a3045]/50 last:border-0">
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded border bg-amber-500/15 text-amber-300 border-amber-500/30 shrink-0">
+                {tx.sigma.toFixed(1)}σ
+              </span>
+              <span className="text-[11px] font-mono text-slate-400 truncate flex-1">
+                {tx.from ? `${tx.from.slice(0, 8)}…${tx.from.slice(-4)}` : '—'}
+              </span>
+              <span className="text-xs font-mono font-semibold text-emerald-400 shrink-0">
+                {fmt(tx.amount)} XRP
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -410,23 +463,8 @@ function BackendStatsRow({ statsData }) {
 }
 
 export default function Dashboard({ transactions, anomalyQueue, modelStats, onDismissAnomaly, ledgerUpdates, recentAnomalies }) {
-  const [localAnomalies, setLocalAnomalies] = useState([])
   const { data: statsData } = useStats()
   const { data: topAccountsData } = useTopAccounts()
-
-  // Merge incoming anomaly queue with local display
-  useEffect(() => {
-    setLocalAnomalies(prev => {
-      const newIds = new Set(prev.map(a => a.id || a.hash))
-      const incoming = (anomalyQueue || []).filter(a => !newIds.has(a.id || a.hash))
-      return [...incoming, ...prev].slice(0, 8)
-    })
-  }, [anomalyQueue])
-
-  const handleDismiss = useCallback((id) => {
-    setLocalAnomalies(prev => prev.filter(a => (a.id || a.hash) !== id))
-    onDismissAnomaly?.(id)
-  }, [onDismissAnomaly])
 
   // Pie chart: anomaly breakdown from real stats, or top accounts by isolation score
   const anomalyTypes = statsData?.anomaly_count_by_type ?? {}
@@ -442,9 +480,6 @@ export default function Dashboard({ transactions, anomalyQueue, modelStats, onDi
 
   // Top addresses for isolation score display
   const topAddresses = topAccountsData?.accounts ?? []
-
-  const hasLedgerUpdates = ledgerUpdates && ledgerUpdates.length > 0
-  const hasRecentAnomalies = recentAnomalies && recentAnomalies.length > 0
 
   return (
     <div className="space-y-6">
@@ -531,57 +566,11 @@ export default function Dashboard({ transactions, anomalyQueue, modelStats, onDi
       </div>
 
       {/* Bottom row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Anomaly Alerts */}
-        <div className="bg-[#1a1f2e] border border-[#2a3045] rounded-xl p-4">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-red-400" />
-              <span className="text-sm font-semibold text-slate-200">Active Anomaly Alerts</span>
-            </div>
-            {localAnomalies.length > 0 && (
-              <button
-                onClick={() => setLocalAnomalies([])}
-                className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
-              >
-                Clear all
-              </button>
-            )}
-          </div>
-
-          <div className="space-y-2 max-h-[280px] overflow-y-auto">
-            <AnimatePresence>
-              {localAnomalies.length > 0 ? (
-                localAnomalies.map(anomaly => (
-                  <AnomalyAlert
-                    key={anomaly.id || anomaly.hash}
-                    anomaly={anomaly}
-                    onDismiss={handleDismiss}
-                  />
-                ))
-              ) : (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="text-center py-8"
-                >
-                  <Shield className="w-8 h-8 text-emerald-500/40 mx-auto mb-2" />
-                  <p className="text-sm text-slate-600">No active anomalies</p>
-                  <p className="text-xs text-slate-700 mt-1">ML monitoring active</p>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </div>
-
-        {/* XRPL Payment Flow */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <BackendAnomaliesPanel />
+        <VolumeSpikePanel transactions={transactions} />
         <PaymentFlowDiagram />
       </div>
-
-      {/* Recent Anomalies from backend WS */}
-      {hasRecentAnomalies && (
-        <RecentAnomaliesPanel recentAnomalies={recentAnomalies} />
-      )}
     </div>
   )
 }
