@@ -125,3 +125,8 @@ export function useVolumeSeries() {
 export function useFeeStats() {
   return useFetch(`${BASE_URL}/api/analytics/fee-stats`)
 }
+
+// GET /api/anomalies/distribution
+export function useAnomalyDistribution() {
+  return useFetch(`${BASE_URL}/api/anomalies/distribution`)
+}

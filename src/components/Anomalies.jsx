@@ -6,7 +6,7 @@ import {
   Shield, Brain, Copy, Check, Database
 } from 'lucide-react'
 import { format } from 'date-fns'
-import { useAnomalies, useStats } from '../hooks/useAPI.js'
+import { useAnomalies, useStats, useAnomalyDistribution } from '../hooks/useAPI.js'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -210,45 +210,46 @@ function FilterBar({ filters, onChange }) {
   )
 }
 
-// ── Score distribution from real confidence scores ────────────────────────────
+// ── Score distribution from full backend dataset ──────────────────────────────
 
-function ScoreDistributionChart({ anomalies }) {
+function ScoreDistributionChart({ distData, loading }) {
   const data = useMemo(() => {
-    const buckets = Array.from({ length: 10 }, (_, i) => ({
-      range: `${(i * 0.1).toFixed(1)}`,
-      count: 0,
-      min: i * 0.1,
+    // Use exact scores from the DB rather than fixed 0.1 buckets
+    const byScore = distData?.by_score ?? []
+    if (byScore.length === 0) return []
+    return byScore.map(b => ({
+      label: b.score.toFixed(2),
+      count: b.total,
+      score: b.score,
     }))
-    ;(anomalies || []).forEach(a => {
-      const score = a.confidence_score ?? 0
-      const idx = Math.min(9, Math.floor(score * 10))
-      buckets[idx].count++
-    })
-    return buckets
-  }, [anomalies])
+  }, [distData])
+
+  if (loading) return <div className="h-40 flex items-center justify-center text-slate-600 text-sm animate-pulse">Loading...</div>
+  if (!data.length) return null
 
   const max = Math.max(...data.map(d => d.count), 1)
   const threshold = 0.7
 
   return (
-    <ResponsiveContainer width="100%" height={160}>
-      <BarChart data={data} barSize={20}>
+    <ResponsiveContainer width="100%" height={180}>
+      <BarChart data={data} barSize={40}>
         <CartesianGrid strokeDasharray="3 3" stroke="#1a2035" vertical={false} />
-        <XAxis dataKey="range" tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} />
-        <YAxis tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} />
+        <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
+        <YAxis tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false}
+          tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} />
         <Tooltip content={({ active, payload, label }) => {
           if (!active || !payload?.length) return null
           return (
             <div className="bg-[#1a1f2e] border border-[#2a3045] rounded-lg p-2 text-xs">
-              <p className="text-slate-400">Score: {label}–{(+label + 0.1).toFixed(1)}</p>
-              <p className="font-mono text-slate-200">{payload[0]?.value} anomalies</p>
+              <p className="text-slate-400">Confidence: {label}</p>
+              <p className="font-mono text-slate-200">{payload[0]?.value?.toLocaleString()} anomalies</p>
             </div>
           )
         }} />
-        <Bar dataKey="count" radius={[3, 3, 0, 0]}>
+        <Bar dataKey="count" radius={[4, 4, 0, 0]}>
           {data.map((entry, i) => (
             <Cell key={i}
-              fill={entry.min >= threshold
+              fill={entry.score >= threshold
                 ? `rgba(239,68,68,${0.4 + entry.count / max * 0.6})`
                 : `rgba(59,130,246,${0.3 + entry.count / max * 0.5})`
               }
@@ -267,6 +268,7 @@ export default function Anomalies() {
 
   const { data: backendData, loading: backendLoading } = useAnomalies(apiFilters)
   const { data: statsData } = useStats()
+  const { data: distData, loading: distLoading } = useAnomalyDistribution()
 
   const anomalies = backendData?.items ?? []
   const total = backendData?.total ?? 0
@@ -303,13 +305,10 @@ export default function Anomalies() {
           <AlertTriangle className="w-4 h-4 text-yellow-400" />
           <span className="text-sm font-semibold text-slate-200">Confidence Score Distribution</span>
           <span className="ml-auto text-xs text-slate-500">
-            {anomalies.length} anomalies loaded · threshold 0.7
+            {distData?.total?.toLocaleString() ?? '—'} total anomalies · threshold 0.7
           </span>
         </div>
-        {anomalies.length > 0
-          ? <ScoreDistributionChart anomalies={anomalies} />
-          : <div className="h-40 flex items-center justify-center text-slate-600 text-sm animate-pulse">Loading...</div>
-        }
+        <ScoreDistributionChart distData={distData} loading={distLoading} />
         <div className="flex items-center gap-3 mt-2 text-[10px] text-slate-500">
           <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-blue-500/50 inline-block" /> Normal (&lt;0.7)</span>
           <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-500/60 inline-block" /> High confidence (≥0.7)</span>

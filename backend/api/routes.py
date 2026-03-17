@@ -135,50 +135,54 @@ async def get_volume_metrics(
     dust_count = 0
     total_count = 0
 
+    payment_count = 0
     for lidx, ts, amt, tx_type, asset_pair in rows:
         hour_key = (str(ts or "")[:13] or "unknown")  # e.g. "2026-03-11T15"
         if hour_key not in buckets:
             buckets[hour_key] = {
                 "timestamp": hour_key,
                 "raw_volume": 0.0,
-                "adjusted_volume": 0.0,
                 "tx_count": 0,
                 "anomaly_count": 0,
             }
         b = buckets[hour_key]
-        amt_f = float(amt or 0)
+        # Only sum XRP-denominated amounts (drops ≤ 1e13); skip token values and nulls
+        is_xrp_payment = (tx_type == "Payment" and amt is not None and float(amt) <= 1e13)
+        amt_f = float(amt) if is_xrp_payment else 0.0
         b["raw_volume"] += amt_f
         b["tx_count"] += 1
         if lidx in anomaly_ledgers:
             b["anomaly_count"] += 1
         raw_total += amt_f
-        if amt_f < 1000:
-            dust_count += 1
         total_count += 1
+        # Dust: only meaningful for payments that actually transfer XRP
+        if tx_type == "Payment" and amt is not None:
+            payment_count += 1
+            if float(amt) < 1000:
+                dust_count += 1
 
-    # Adjusted volume = raw minus dust amounts
-    dust_result = await db.execute(
-        text("SELECT COALESCE(SUM(amount_drops), 0) FROM transactions WHERE amount_drops < 1000")
+    # Wash trade ratio: fraction of transactions sent by flagged wash-trade accounts
+    wt_accounts_result = await db.execute(
+        text("SELECT DISTINCT attacker_address FROM anomaly_flags WHERE anomaly_type='wash_trade'")
     )
-    dust_volume = float(dust_result.scalar() or 0)
-    adjusted_total = raw_total - dust_volume
+    wt_accounts = {r[0] for r in wt_accounts_result.fetchall()}
 
-    for b in buckets.values():
-        b["adjusted_volume"] = b["raw_volume"] * (adjusted_total / raw_total) if raw_total > 0 else 0.0
-
-    # Wash trade and sandwich counts from anomaly_flags
-    wt_result = await db.execute(
-        text("SELECT COUNT(*) FROM anomaly_flags WHERE anomaly_type='wash_trade'")
+    wt_tx_result = await db.execute(
+        text("SELECT COUNT(*) FROM transactions WHERE account = ANY(:addrs)")
+        if False else  # SQLite doesn't support ANY(); use IN with subquery
+        text("SELECT COUNT(*) FROM transactions WHERE account IN (SELECT DISTINCT attacker_address FROM anomaly_flags WHERE anomaly_type='wash_trade')")
     )
-    wash_count = wt_result.scalar() or 0
+    wash_tx_count = wt_tx_result.scalar() or 0
 
     sw_result = await db.execute(
         text("SELECT COUNT(*) FROM anomaly_flags WHERE anomaly_type='sandwich'")
     )
     sandwich_count = sw_result.scalar() or 0
 
-    wash_ratio = wash_count / max(total_count, 1)
-    dust_ratio = dust_count / max(total_count, 1)
+    # Dust ratio: only over Payment transactions (not OfferCreate, NFToken, etc.)
+    dust_ratio = dust_count / max(payment_count, 1)
+    # Wash trade ratio: fraction of all transactions from wash-trade-flagged accounts
+    wash_ratio = wash_tx_count / max(total_count, 1)
 
     sorted_buckets = sorted(buckets.values(), key=lambda x: x["timestamp"])
 
@@ -186,7 +190,6 @@ async def get_volume_metrics(
         "buckets": sorted_buckets,
         "summary": {
             "raw_total": raw_total,
-            "adjusted_total": adjusted_total,
             "wash_trade_ratio": round(wash_ratio, 6),
             "dust_ratio": round(dust_ratio, 6),
             "sandwich_count": sandwich_count,
@@ -655,6 +658,35 @@ async def get_volume_series(db: AsyncSession = Depends(get_db)):
 # ---------------------------------------------------------------------------
 # Extend /stats with avg_fee
 # ---------------------------------------------------------------------------
+
+@router.get("/anomalies/distribution")
+async def get_anomaly_distribution(db: AsyncSession = Depends(get_db)):
+    """Return confidence score distribution across ALL anomaly_flags rows."""
+    result = await db.execute(text(
+        """
+        SELECT confidence_score, anomaly_type, COUNT(*) as cnt
+        FROM anomaly_flags
+        GROUP BY confidence_score, anomaly_type
+        ORDER BY confidence_score
+        """
+    ))
+    rows = result.fetchall()
+    buckets = [{"score": round(i * 0.1, 1), "count": 0} for i in range(11)]
+    by_score = {}
+    for score, atype, cnt in rows:
+        idx = min(9, int(round(float(score or 0) * 10)))
+        buckets[idx]["count"] += cnt
+        key = f"{score:.4f}"
+        if key not in by_score:
+            by_score[key] = {"score": float(score or 0), "total": 0, "by_type": {}}
+        by_score[key]["total"] += cnt
+        by_score[key]["by_type"][atype] = cnt
+    return {
+        "buckets": buckets[:10],
+        "by_score": sorted(by_score.values(), key=lambda x: x["score"]),
+        "total": sum(r[2] for r in rows),
+    }
+
 
 @router.get("/analytics/fee-stats")
 async def get_fee_stats(db: AsyncSession = Depends(get_db)):

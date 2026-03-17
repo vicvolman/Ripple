@@ -1,11 +1,10 @@
-import { useState } from 'react'
 import {
   BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, RadarChart, Radar, PolarGrid, PolarAngleAxis,
   LineChart, Line, ReferenceLine, Area, AreaChart, ComposedChart
 } from 'recharts'
 import { motion } from 'framer-motion'
-import { TrendingUp, BarChart2, Activity, Users, Clock, Grid } from 'lucide-react'
+import { TrendingUp, BarChart2, Activity, Users } from 'lucide-react'
 import { useVolume, useTopAccounts, useTxTypes, useWalletPairs, useVolumeSeries } from '../hooks/useAPI.js'
 
 const CHART_COLORS = ['#3b82f6', '#8b5cf6', '#f59e0b', '#10b981', '#06b6d4', '#ef4444', '#f97316', '#ec4899']
@@ -50,7 +49,7 @@ function Skeleton({ h = 220 }) {
   return <div className="animate-pulse bg-[#2a3045]/40 rounded-lg" style={{ height: h }} />
 }
 
-// ── Volume: Raw vs Adjusted ───────────────────────────────────────────────────
+// ── Volume over time ──────────────────────────────────────────────────────────
 
 function VolumeChart({ data, loading }) {
   if (loading) return <Skeleton />
@@ -59,8 +58,7 @@ function VolumeChart({ data, loading }) {
 
   const chartData = buckets.map(b => ({
     time: (b.timestamp ?? '').slice(-5),
-    raw: +(b.raw_volume ?? 0).toFixed(2),
-    adjusted: +(b.adjusted_volume ?? 0).toFixed(2),
+    volume: +((b.raw_volume ?? 0) / 1e6).toFixed(2),
     anomalies: b.anomaly_count ?? 0,
   }))
 
@@ -70,11 +68,9 @@ function VolumeChart({ data, loading }) {
         <CartesianGrid strokeDasharray="3 3" stroke="#1a2035" vertical={false} />
         <XAxis dataKey="time" tick={{ fill: '#64748b', fontSize: 9 }} axisLine={false} tickLine={false} />
         <YAxis tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false}
-          tickFormatter={v => v >= 1e6 ? `${(v/1e6).toFixed(1)}M` : v >= 1000 ? `${(v/1000).toFixed(1)}K` : v} />
-        <Tooltip content={<CustomTooltip formatter={v => `${(+v).toLocaleString()} drops`} />} />
-        <Legend wrapperStyle={{ fontSize: '11px', color: '#94a3b8' }} />
-        <Area type="monotone" dataKey="raw" name="Raw Volume" stroke="#3b82f6" fill="#3b82f615" strokeWidth={2} dot={false} />
-        <Area type="monotone" dataKey="adjusted" name="Adjusted Volume" stroke="#10b981" fill="#10b98115" strokeWidth={2} dot={false} />
+          tickFormatter={v => v >= 1e9 ? `${(v/1e9).toFixed(1)}B` : v >= 1e6 ? `${(v/1e6).toFixed(1)}M` : v >= 1000 ? `${(v/1000).toFixed(1)}K` : v} />
+        <Tooltip content={<CustomTooltip formatter={v => `${(+v).toLocaleString()} XRP`} />} />
+        <Area type="monotone" dataKey="volume" name="Volume" stroke="#3b82f6" fill="#3b82f615" strokeWidth={2} dot={false} />
       </AreaChart>
     </ResponsiveContainer>
   )
@@ -84,13 +80,12 @@ function VolumeSummaryCards({ data }) {
   if (!data?.summary) return null
   const s = data.summary
   const cards = [
-    { label: 'Raw Volume (drops)', value: (s.raw_total ?? 0).toExponential(3), color: 'text-blue-400' },
-    { label: 'Adjusted Volume', value: (s.adjusted_total ?? 0).toExponential(3), color: 'text-emerald-400' },
+    { label: 'Total Volume (XRP)', value: ((s.raw_total ?? 0) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 0 }), color: 'text-blue-400' },
     { label: 'Wash Trade Ratio', value: `${((s.wash_trade_ratio ?? 0) * 100).toFixed(2)}%`, color: 'text-red-400' },
     { label: 'Dust Tx Ratio', value: `${((s.dust_ratio ?? 0) * 100).toFixed(1)}%`, color: 'text-amber-400' },
   ]
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+    <div className="grid grid-cols-3 gap-4">
       {cards.map(c => (
         <motion.div key={c.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
           className="bg-[#1a1f2e] border border-[#2a3045] rounded-xl p-4 text-center">
@@ -279,12 +274,8 @@ function TxTypeBar({ data, loading }) {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-const TIME_WINDOWS = ['1h', '6h', '24h', '7d']
-
 export default function Analytics() {
-  const [timeWindow, setTimeWindow] = useState('24h')
-
-  const { data: volumeData, loading: volumeLoading } = useVolume(timeWindow)
+  const { data: volumeData, loading: volumeLoading } = useVolume()
   const { data: topAccountsData, loading: topAccountsLoading } = useTopAccounts()
   const { data: txTypesData, loading: txTypesLoading } = useTxTypes()
   const { data: walletPairsData, loading: walletPairsLoading } = useWalletPairs(10)
@@ -292,21 +283,8 @@ export default function Analytics() {
 
   return (
     <div className="space-y-6">
-      {/* Time window selector */}
-      <div className="flex items-center gap-2">
-        <Clock className="w-4 h-4 text-slate-500" />
-        <span className="text-xs text-slate-500">Window:</span>
-        <div className="flex gap-1">
-          {TIME_WINDOWS.map(w => (
-            <button key={w} onClick={() => setTimeWindow(w)}
-              className={`px-2.5 py-1 rounded text-xs font-medium uppercase transition-colors ${
-                timeWindow === w ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
-              }`}>
-              {w}
-            </button>
-          ))}
-        </div>
-        <span className="ml-auto text-[10px] text-blue-400 font-mono">All data from backend · real XRPL transactions</span>
+      <div className="flex items-center justify-end">
+        <span className="text-[10px] text-blue-400 font-mono">All data from backend · real XRPL transactions</span>
       </div>
 
       {/* Volume summary cards */}
@@ -314,7 +292,7 @@ export default function Analytics() {
 
       {/* Volume chart */}
       <Card>
-        <CardHeader icon={TrendingUp} title="Volume Over Time (Raw vs Adjusted)" badge={timeWindow} />
+        <CardHeader icon={TrendingUp} title="Volume Over Time" />
         <VolumeChart data={volumeData} loading={volumeLoading} />
       </Card>
 
