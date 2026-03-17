@@ -5,7 +5,7 @@ import {
 } from 'recharts'
 import {
   Activity, AlertTriangle, Wallet, DollarSign,
-  X, Shield, TrendingUp, ArrowRightLeft
+  X, Shield, ArrowRightLeft
 } from 'lucide-react'
 import LiveFeed from './LiveFeed.jsx'
 
@@ -140,64 +140,104 @@ function AnomalyAlert({ anomaly, onDismiss }) {
   )
 }
 
-// Token flow summary panel
-function TokenFlowPanel({ transactions }) {
-  const flows = useMemo(() => {
-    const byType = {}
-    transactions.forEach(tx => {
-      if (!byType[tx.type]) byType[tx.type] = { count: 0, volume: 0 }
-      byType[tx.type].count++
-      byType[tx.type].volume += parseFloat(tx.amount) || 0
-    })
-    return Object.entries(byType)
-      .map(([type, d]) => ({ type, ...d, volume: Math.round(d.volume * 100) / 100 }))
-      .sort((a, b) => b.volume - a.volume)
-      .slice(0, 5)
-  }, [transactions])
+// XRPL Payment Flow diagram
+function PaymentFlowDiagram() {
+  const [step, setStep] = useState(0)
 
-  const typeColors = {
-    Payment: '#3b82f6',
-    EscrowCreate: '#8b5cf6',
-    EscrowFinish: '#06b6d4',
-    EscrowCancel: '#f59e0b',
-    OfferCreate: '#10b981',
-    OfferDelete: '#ef4444',
-    TrustSet: '#f97316',
-    AccountSet: '#ec4899',
-  }
+  useEffect(() => {
+    const interval = setInterval(() => setStep(s => (s + 1) % 4), 900)
+    return () => clearInterval(interval)
+  }, [])
 
-  const maxVolume = Math.max(...flows.map(f => f.volume), 1)
+  const nodes = [
+    { label: 'Sender Wallet', sub: 'rXXXX...YYYY', icon: '👤', color: '#3b82f6' },
+    { label: 'XRPL Ledger', sub: 'Consensus', icon: '🔗', color: '#8b5cf6' },
+    { label: 'Validation', sub: 'tesSUCCESS', icon: '✅', color: '#06b6d4' },
+    { label: 'Receiver Wallet', sub: 'rAAAA...BBBB', icon: '🏦', color: '#10b981' },
+  ]
+
+  const steps = [
+    'Sender signs & submits transaction',
+    'XRPL consensus validates ledger',
+    'Transaction result confirmed',
+    'RLUSD credited to receiver',
+  ]
 
   return (
     <div className="bg-[#1a1f2e] border border-[#2a3045] rounded-xl p-4 h-full">
       <div className="flex items-center gap-2 mb-4">
         <ArrowRightLeft className="w-4 h-4 text-cyan-400" />
-        <span className="text-sm font-semibold text-slate-200">Token Flow by Type</span>
+        <span className="text-sm font-semibold text-slate-200">XRPL Payment Flow</span>
+        <span className="ml-auto text-[10px] text-slate-600 font-mono">~3-5s settlement</span>
       </div>
-      <div className="space-y-3">
-        {flows.map(f => (
-          <div key={f.type}>
-            <div className="flex items-center justify-between text-xs mb-1">
-              <span className="text-slate-300 font-medium">{f.type}</span>
-              <div className="flex items-center gap-3 text-slate-500">
-                <span>{f.count} txns</span>
-                <span className="font-mono text-slate-400">{f.volume.toLocaleString()} RLUSD</span>
-              </div>
-            </div>
-            <div className="h-2 bg-[#0a0e1a] rounded-full overflow-hidden">
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${(f.volume / maxVolume) * 100}%` }}
-                transition={{ duration: 0.8, ease: 'easeOut' }}
-                className="h-full rounded-full"
-                style={{ background: typeColors[f.type] || '#64748b' }}
+
+      <div className="flex items-center justify-between relative mb-4">
+        {/* Lines */}
+        <div className="absolute inset-x-8 top-6 flex" style={{ zIndex: 0 }}>
+          {[0, 1, 2].map(i => (
+            <div key={i} className="flex-1 relative h-0.5 bg-[#2a3045]">
+              <div
+                className="absolute top-0 h-full transition-all duration-300"
+                style={{
+                  background: `linear-gradient(90deg, transparent, ${nodes[i].color}, transparent)`,
+                  width: '40%',
+                  left: step === i ? '60%' : '-40%',
+                  opacity: step === i ? 1 : 0,
+                  transition: 'left 0.7s ease, opacity 0.3s',
+                }}
               />
             </div>
+          ))}
+        </div>
+
+        {nodes.map((node, i) => (
+          <div key={node.label} className="flex flex-col items-center gap-1.5 relative z-10">
+            <div
+              className="w-11 h-11 rounded-xl flex items-center justify-center text-lg border-2 transition-all duration-400"
+              style={{
+                borderColor: step === i ? node.color : '#2a3045',
+                background: step === i ? `${node.color}20` : '#0a0e1a',
+                boxShadow: step === i ? `0 0 18px ${node.color}50` : 'none',
+              }}
+            >
+              {node.icon}
+            </div>
+            <span className="text-[10px] text-slate-400 font-medium text-center leading-tight">{node.label}</span>
+            <span className="text-[9px] text-slate-600 font-mono">{node.sub}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="space-y-1 mt-2">
+        {steps.map((s, i) => (
+          <div key={i} className={`flex items-center gap-2 text-xs py-1 px-2 rounded transition-all duration-300 ${step === i ? 'bg-blue-500/10 text-slate-200' : 'text-slate-600'}`}>
+            <div className={`w-1.5 h-1.5 rounded-full shrink-0 transition-colors duration-300 ${step === i ? 'bg-blue-400' : 'bg-slate-700'}`} />
+            {s}
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 mt-4">
+        {[
+          { label: 'Avg Fee', value: '0.00001 XRP' },
+          { label: 'Finality', value: '~4 seconds' },
+          { label: 'Throughput', value: '1,500 TPS' },
+        ].map(stat => (
+          <div key={stat.label} className="bg-[#0a0e1a] border border-[#2a3045] rounded-lg p-2 text-center">
+            <div className="text-xs font-bold text-slate-300">{stat.value}</div>
+            <div className="text-[9px] text-slate-600 mt-0.5">{stat.label}</div>
           </div>
         ))}
       </div>
     </div>
   )
+}
+
+function formatVolume(n) {
+  if (n >= 1e9) return `${(n / 1e9).toFixed(2)}B`
+  if (n >= 1e6) return `${(n / 1e6).toFixed(2)}M`
+  if (n >= 1e3) return `${(n / 1e3).toFixed(2)}K`
+  return n.toFixed(2)
 }
 
 const CHART_COLORS = ['#3b82f6', '#8b5cf6', '#f59e0b', '#10b981', '#06b6d4', '#ef4444', '#f97316', '#ec4899']
@@ -260,8 +300,7 @@ export default function Dashboard({ transactions, anomalyQueue, modelStats, onDi
         <StatCard
           icon={DollarSign}
           label="RLUSD Volume"
-          value={Math.round(totalVolume)}
-          suffix="RLUSD"
+          value={formatVolume(totalVolume)}
           subValue="Rolling window"
           color="bg-emerald-500/15 text-emerald-400"
           trend={12}
@@ -277,7 +316,7 @@ export default function Dashboard({ transactions, anomalyQueue, modelStats, onDi
         <StatCard
           icon={AlertTriangle}
           label="Anomalies Detected"
-          value={transactions.filter(t => t.isAnomaly).length}
+          value={(anomalyQueue || []).length}
           subValue={`${(modelStats?.anomalyRate || 0).toFixed(1)}% rate`}
           color="bg-red-500/15 text-red-400"
           trend={-2}
@@ -405,8 +444,8 @@ export default function Dashboard({ transactions, anomalyQueue, modelStats, onDi
           </div>
         </div>
 
-        {/* Token flow by type */}
-        <TokenFlowPanel transactions={transactions} />
+        {/* XRPL Payment Flow */}
+        <PaymentFlowDiagram />
       </div>
     </div>
   )

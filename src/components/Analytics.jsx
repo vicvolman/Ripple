@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, RadarChart, Radar, PolarGrid, PolarAngleAxis,
@@ -341,11 +341,20 @@ function AgentPairsTable({ pairs }) {
 }
 
 export default function Analytics({ transactions }) {
-  const dailyData = useMemo(() => generateDailyVolumeData(), [])
-  const heatmapData = useMemo(() => generateHeatmapData(), [])
-  const bollingerData = useMemo(() => generateBollingerData(), [])
-  const topPairs = useMemo(() => getTopWalletPairs(), [])
-  const radarData = useMemo(() => computeRadarData(HISTORICAL_TRANSACTIONS), [])
+  // Refresh chart data every 30 seconds only
+  const [refreshTick, setRefreshTick] = useState(0)
+  const [countdown, setCountdown] = useState(30)
+  useEffect(() => {
+    const tick = setInterval(() => setRefreshTick(t => t + 1), 30000)
+    const cd = setInterval(() => setCountdown(c => c <= 1 ? 30 : c - 1), 1000)
+    return () => { clearInterval(tick); clearInterval(cd) }
+  }, [])
+
+  const dailyData = useMemo(() => generateDailyVolumeData(), [refreshTick])
+  const heatmapData = useMemo(() => generateHeatmapData(), [refreshTick])
+  const bollingerData = useMemo(() => generateBollingerData(), [refreshTick])
+  const topPairs = useMemo(() => getTopWalletPairs(), [refreshTick])
+  const radarData = useMemo(() => computeRadarData(HISTORICAL_TRANSACTIONS), [refreshTick])
 
   // Summary stats
   const totalVolume = dailyData.reduce((s, d) => s + d.normalVolume + d.anomalousVolume, 0)
@@ -356,6 +365,12 @@ export default function Analytics({ transactions }) {
 
   return (
     <div className="space-y-6">
+      {/* Refresh indicator */}
+      <div className="flex items-center justify-end gap-2 text-xs text-slate-600 -mb-2">
+        <div className="w-1.5 h-1.5 rounded-full bg-blue-500/50 animate-pulse" />
+        Charts refresh in <span className="font-mono text-slate-400">{countdown}s</span>
+      </div>
+
       {/* Summary stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[

@@ -30,7 +30,7 @@ function AnimatedLogo() {
           Ripple<span className="gradient-text"> Analytics</span>
         </div>
         <div className="text-[9px] text-slate-600 tracking-widest uppercase">
-          XRPL Ledger Insights
+          Group 4 · XRPL Insights
         </div>
       </div>
     </div>
