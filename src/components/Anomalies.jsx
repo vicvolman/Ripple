@@ -214,12 +214,12 @@ function FilterBar({ filters, onChange }) {
 
 function ScoreDistributionChart({ distData, loading }) {
   const data = useMemo(() => {
-    // Use exact scores from the DB rather than fixed 0.1 buckets
-    const byScore = distData?.by_score ?? []
-    if (byScore.length === 0) return []
-    return byScore.map(b => ({
-      label: b.score.toFixed(2),
-      count: b.total,
+    // Use evenly-spaced 0.1 buckets so x-axis spans the full 0.0–0.9 range
+    const buckets = distData?.buckets ?? []
+    if (buckets.length === 0) return []
+    return buckets.map(b => ({
+      label: b.score.toFixed(1),
+      count: b.count,
       score: b.score,
     }))
   }, [distData])
