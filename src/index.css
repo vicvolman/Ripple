@@ -1,0 +1,323 @@
+/* Import JetBrains Mono from Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base styles */
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background-color: #0a0e1a;
+  color: #f1f5f9;
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0a0e1a;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2a3045;
+  border-radius: 3px;
+  transition: background 0.2s;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3a4560;
+}
+
+::-webkit-scrollbar-corner {
+  background: #0a0e1a;
+}
+
+/* Live indicator pulsing animation */
+@keyframes livePulse {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  }
+  50% {
+    opacity: 0.8;
+    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+  }
+}
+
+.live-dot {
+  animation: livePulse 1.5s ease-in-out infinite;
+}
+
+/* Transaction slide-in animation */
+@keyframes txSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
+    background-color: rgba(59, 130, 246, 0.1);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+    background-color: transparent;
+  }
+}
+
+.tx-slide-in {
+  animation: txSlideIn 0.35s ease-out forwards;
+}
+
+/* Gradient card backgrounds */
+.card-gradient {
+  background: linear-gradient(135deg, #1a1f2e 0%, #242938 100%);
+  border: 1px solid #2a3045;
+}
+
+.card-gradient-blue {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(139, 92, 246, 0.08) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.card-gradient-green {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(6, 182, 212, 0.08) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.card-gradient-red {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(245, 158, 11, 0.08) 100%);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.card-gradient-purple {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(59, 130, 246, 0.08) 100%);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+/* Custom chart tooltip */
+.custom-tooltip {
+  background: #1a1f2e;
+  border: 1px solid #2a3045;
+  border-radius: 8px;
+  padding: 10px 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.custom-tooltip .label {
+  color: #94a3b8;
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+
+.custom-tooltip .value {
+  color: #f1f5f9;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* Anomaly alert dismiss animation */
+@keyframes alertFadeOut {
+  0% { opacity: 1; transform: translateX(0); max-height: 120px; }
+  70% { opacity: 0; transform: translateX(100%); max-height: 120px; }
+  100% { opacity: 0; transform: translateX(100%); max-height: 0; overflow: hidden; padding: 0; margin: 0; }
+}
+
+.alert-dismiss {
+  animation: alertFadeOut 0.4s ease-in forwards;
+}
+
+/* Heatmap cell hover */
+.heatmap-cell {
+  transition: transform 0.1s ease, opacity 0.1s ease;
+  cursor: pointer;
+}
+
+.heatmap-cell:hover {
+  transform: scale(1.2);
+  z-index: 10;
+  position: relative;
+}
+
+/* Flow animation for SVG paths */
+@keyframes dashFlow {
+  from { stroke-dashoffset: 40; }
+  to { stroke-dashoffset: 0; }
+}
+
+.flow-line {
+  stroke-dasharray: 8 4;
+  animation: dashFlow 0.8s linear infinite;
+}
+
+/* Dot flow animation */
+@keyframes dotFlow {
+  0% { offset-distance: 0%; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { offset-distance: 100%; opacity: 0; }
+}
+
+.flow-dot {
+  animation: dotFlow 2s linear infinite;
+  offset-path: path('M 50 50 L 250 50');
+}
+
+/* Scanning animation */
+@keyframes scanLine {
+  0% { top: 0%; }
+  100% { top: 100%; }
+}
+
+.scan-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #3b82f6, transparent);
+  animation: scanLine 1.5s linear infinite;
+}
+
+/* Number counter animation */
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.count-up {
+  animation: countUp 0.3s ease-out;
+}
+
+/* Glow effects */
+.glow-blue {
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+}
+
+.glow-green {
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+}
+
+.glow-red {
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+}
+
+/* Badge styles */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.badge-payment { background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+.badge-escrow { background: rgba(139, 92, 246, 0.2); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.3); }
+.badge-offer { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+.badge-trust { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+.badge-other { background: rgba(100, 116, 139, 0.2); color: #94a3b8; border: 1px solid rgba(100, 116, 139, 0.3); }
+.badge-anomaly { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
+
+/* Grid line pattern background */
+.grid-bg {
+  background-image:
+    linear-gradient(rgba(42, 48, 69, 0.3) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(42, 48, 69, 0.3) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* Progress bar styles */
+.progress-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: #2a3045;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.8s ease-in-out;
+}
+
+/* Table styles */
+.data-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.data-table th {
+  background: #0a0e1a;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 10px 14px;
+  text-align: left;
+  border-bottom: 1px solid #2a3045;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.data-table td {
+  padding: 10px 14px;
+  font-size: 13px;
+  border-bottom: 1px solid rgba(42, 48, 69, 0.5);
+  color: #cbd5e1;
+}
+
+.data-table tr:hover td {
+  background: rgba(42, 48, 69, 0.3);
+}
+
+.data-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-text-green {
+  background: linear-gradient(135deg, #10b981, #06b6d4);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Recharts overrides */
+.recharts-text {
+  fill: #64748b !important;
+  font-size: 11px !important;
+}
+
+.recharts-cartesian-axis-tick-value {
+  fill: #64748b !important;
+}
+
+.recharts-legend-item-text {
+  color: #94a3b8 !important;
+}
