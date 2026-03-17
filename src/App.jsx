@@ -31,7 +31,7 @@ function AnimatedLogo() {
       </div>
       <div>
         <div className="text-sm font-bold text-white tracking-tight">
-          Ripple<span className="gradient-text"> Analytics</span>
+          XRPL<span className="gradient-text"> Analytics</span>
         </div>
         <div className="text-[9px] text-slate-600 tracking-widest uppercase">
           Group 4 · XRPL Insights
@@ -217,7 +217,7 @@ export default function App() {
       <main className="flex-1 max-w-screen-2xl mx-auto w-full px-4 sm:px-6 py-6">
         {/* Breadcrumb */}
         <div className="flex items-center gap-1.5 text-xs text-slate-600 mb-5">
-          <span>Ripple Analytics</span>
+          <span>XRPL Analytics</span>
           <ChevronRight className="w-3 h-3" />
           <span className="text-slate-400 capitalize">{activeTab}</span>
         </div>
@@ -297,7 +297,7 @@ export default function App() {
             <span className="text-slate-400 font-semibold">RLUSD</span>
           </div>
           <div className="flex items-center gap-4">
-            <span>© 2026 Ripple Analytics</span>
+            <span>© 2026 XRPL Analytics</span>
             <span className="flex items-center gap-1">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
               <span>All systems operational</span>
