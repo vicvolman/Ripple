@@ -10,7 +10,7 @@ import {
   generateDailyVolumeData,
   generateHeatmapData,
   generateBollingerData,
-  getTopAgentPairs,
+  getTopWalletPairs,
   HISTORICAL_TRANSACTIONS,
 } from '../utils/mockData.js'
 import { computeRadarData } from '../utils/mlModels.js'
@@ -299,13 +299,13 @@ function BollingerChart({ data }) {
   )
 }
 
-// Top agent pairs table
+// Top wallet pairs table
 function AgentPairsTable({ pairs }) {
   return (
     <div className="bg-[#1a1f2e] border border-[#2a3045] rounded-xl p-5">
       <div className="flex items-center gap-2 mb-4">
         <Users className="w-4 h-4 text-yellow-400" />
-        <span className="text-sm font-semibold text-slate-200">Top Agent Pairs by Volume</span>
+        <span className="text-sm font-semibold text-slate-200">Top Wallet Pairs by Volume</span>
       </div>
       <div className="overflow-x-auto">
         <table className="data-table">
@@ -344,7 +344,7 @@ export default function Analytics({ transactions }) {
   const dailyData = useMemo(() => generateDailyVolumeData(), [])
   const heatmapData = useMemo(() => generateHeatmapData(), [])
   const bollingerData = useMemo(() => generateBollingerData(), [])
-  const topPairs = useMemo(() => getTopAgentPairs(), [])
+  const topPairs = useMemo(() => getTopWalletPairs(), [])
   const radarData = useMemo(() => computeRadarData(HISTORICAL_TRANSACTIONS), [])
 
   // Summary stats

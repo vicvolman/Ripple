@@ -1,158 +1,23 @@
 import { subDays, subHours, subMinutes, format } from 'date-fns'
 
-// 10 unique agent wallet addresses
-export const MOCK_AGENTS = [
-  {
-    id: 'agent_001',
-    address: 'rAgentX1vK8T3mNpQs7LdFwYhR4cBzJ9eU',
-    name: 'DataMind Alpha',
-    specialty: 'Data Analysis',
-    rating: 4.9,
-    pricePerTask: 2.5,
-    totalJobs: 1847,
-    reputationScore: 98.2,
-    description: 'Advanced data analytics and pattern recognition specialist',
-    successRate: 99.1,
-    avgCompletionTime: '45s',
-    icon: '🧠',
-  },
-  {
-    id: 'agent_002',
-    address: 'rAgentX2mL5pQwNsR8KdGhT1cFzV6bY0j',
-    name: 'ComputeNode Beta',
-    specialty: 'Compute',
-    rating: 4.7,
-    pricePerTask: 5.0,
-    totalJobs: 3214,
-    reputationScore: 96.8,
-    description: 'High-performance distributed computing tasks',
-    successRate: 97.4,
-    avgCompletionTime: '120s',
-    icon: '⚡',
-  },
-  {
-    id: 'agent_003',
-    address: 'rAgentX3nW7tRvMqP2LaHdU9sYcK4gX1f',
-    name: 'ModelForge Gamma',
-    specialty: 'Model Training',
-    rating: 4.8,
-    pricePerTask: 15.0,
-    totalJobs: 892,
-    reputationScore: 97.5,
-    description: 'ML model training and fine-tuning on distributed infrastructure',
-    successRate: 98.6,
-    avgCompletionTime: '300s',
-    icon: '🔬',
-  },
-  {
-    id: 'agent_004',
-    address: 'rAgentX4bC9uSoJkE3NrWxT6mFpZhV5qD',
-    name: 'APIBridge Delta',
-    specialty: 'API Access',
-    rating: 4.6,
-    pricePerTask: 0.5,
-    totalJobs: 12456,
-    reputationScore: 95.3,
-    description: 'Seamless API aggregation and data bridging across services',
-    successRate: 96.2,
-    avgCompletionTime: '8s',
-    icon: '🔗',
-  },
-  {
-    id: 'agent_005',
-    address: 'rAgentX5dH2vTlKrM4OsBeP7nGqWyX8cZ',
-    name: 'VaultKeeper Epsilon',
-    specialty: 'Storage',
-    rating: 4.9,
-    pricePerTask: 1.0,
-    totalJobs: 5678,
-    reputationScore: 99.0,
-    description: 'Decentralized storage with IPFS and Filecoin integration',
-    successRate: 99.5,
-    avgCompletionTime: '60s',
-    icon: '💾',
-  },
-  {
-    id: 'agent_006',
-    address: 'rAgentX6eI3wUmLsN5PtCfQ8oHrXzY9aB',
-    name: 'ValidatorPrime Zeta',
-    specialty: 'Validation',
-    rating: 4.8,
-    pricePerTask: 3.0,
-    totalJobs: 7234,
-    reputationScore: 98.7,
-    description: 'Zero-knowledge proof validation and smart contract auditing',
-    successRate: 99.2,
-    avgCompletionTime: '30s',
-    icon: '✅',
-  },
-  {
-    id: 'agent_007',
-    address: 'rAgentX7fJ4xVnMtO6QuDgR9pIsYwZ0bC',
-    name: 'OracleNet Eta',
-    specialty: 'Data Analysis',
-    rating: 4.5,
-    pricePerTask: 4.0,
-    totalJobs: 2341,
-    reputationScore: 94.1,
-    description: 'Real-time oracle data feeds with anomaly filtering',
-    successRate: 95.8,
-    avgCompletionTime: '25s',
-    icon: '🔮',
-  },
-  {
-    id: 'agent_008',
-    address: 'rAgentX8gK5yWoNuP7RvEhS0qJtZxA1cD',
-    name: 'NeuralSwarm Theta',
-    specialty: 'Model Training',
-    rating: 4.7,
-    pricePerTask: 20.0,
-    totalJobs: 456,
-    reputationScore: 96.4,
-    description: 'Federated learning and neural architecture search',
-    successRate: 97.8,
-    avgCompletionTime: '600s',
-    icon: '🕸️',
-  },
-  {
-    id: 'agent_009',
-    address: 'rAgentX9hL6zXpOvQ8SwFiT1rKuAyB2dE',
-    name: 'FluxBridge Iota',
-    specialty: 'API Access',
-    rating: 4.4,
-    pricePerTask: 0.8,
-    totalJobs: 9876,
-    reputationScore: 93.7,
-    description: 'Cross-chain bridge aggregator with MEV protection',
-    successRate: 94.9,
-    avgCompletionTime: '15s',
-    icon: '🌊',
-  },
-  {
-    id: 'agent_010',
-    address: 'rAgentX0iM7aYqPwR9TxGjU2sLvBzC3eF',
-    name: 'QuarkStore Kappa',
-    specialty: 'Storage',
-    rating: 4.6,
-    pricePerTask: 1.5,
-    totalJobs: 4123,
-    reputationScore: 95.9,
-    description: 'Quantum-resistant encrypted storage with redundancy',
-    successRate: 97.1,
-    avgCompletionTime: '45s',
-    icon: '🗄️',
-  },
-]
-
-const REQUESTER_ADDRESSES = [
-  'rRequester1aBcDeFgHiJkLmNoPqRsTuVwXy',
-  'rRequester2bCdEfGhIjKlMnOpQrStUvWxYz',
-  'rRequester3cDeEfGhIjKlMnOpQrStUvWxYz',
-  'rRequester4dEfFgHiJkLmNoPqRsTuVwXyZa',
-  'rRequester5eFgGhIjKlMnOpQrStUvWxYzAb',
-  'rRequester6fGhHiJkLmNoPqRsTuVwXyZaBc',
-  'rRequester7gHiIjKlMnOpQrStUvWxYzAbCd',
-  'rRequester8hIjJkLmNoPqRsTuVwXyZaBcDe',
+// XRPL wallet addresses for simulation
+const WALLET_ADDRESSES = [
+  'rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh',
+  'rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe',
+  'r9cZA1mLK5R5Am25ArfXFmqgNwjZgnfk59',
+  'rGWrZyax5eXbi5gs49MRZKmm3wEkNPGSQL',
+  'rN7n3473SaZBCG4dFL83w7PB3vGNmEGQBT',
+  'rDNvpqSzBmgFqzeEzFSCuCMDQYePCQTSXN',
+  'r4GDFMLGJUKMjNEycY6m3S2HNtcTnygKsM',
+  'rBKPS4oLSaV2KVVuHH8EpQqMGgGefGFQs7',
+  'rLHzPsX6oXkzU2qL5BtsFMQbkzUxbMFGgW',
+  'rHsMkBSMHkgSo5eKXGXPQCkJWrjFnZHxeQ',
+  'rPbMHxs7vy3he6qLzWWnRBBNnuoFQBe9uC',
+  'rKiCet8SdvWxPXnAgYarFUXd6PiVrokqe9',
+  'rN2n9UkQnHsNDPBnqNFNpSUEkD9V7V6xgz',
+  'rUpy3eEg8rqjqfUoLeBnZkscbKbFsKXC3v',
+  'rBvKmPCjSFBWdbMXBmFRZqQRRTnmhRjbmV',
+  'rQLbzfMnNfE7T5BHDW7cRjAxDNt1mHKVoS',
 ]
 
 const TX_TYPES = ['Payment', 'Payment', 'Payment', 'Payment', 'Payment',
@@ -167,8 +32,9 @@ let txCounter = 1000
 
 export function generateMockTransaction(overrides = {}) {
   const now = new Date()
-  const agentIdx = Math.floor(Math.random() * MOCK_AGENTS.length)
-  const requesterIdx = Math.floor(Math.random() * REQUESTER_ADDRESSES.length)
+  const fromIdx = Math.floor(Math.random() * WALLET_ADDRESSES.length)
+  let toIdx = Math.floor(Math.random() * WALLET_ADDRESSES.length)
+  if (toIdx === fromIdx) toIdx = (toIdx + 1) % WALLET_ADDRESSES.length
   const typeIdx = Math.floor(Math.random() * TX_TYPES.length)
   const txType = TX_TYPES[typeIdx]
 
@@ -184,7 +50,7 @@ export function generateMockTransaction(overrides = {}) {
   } else if (isAnomaly && anomalyType === 'rapid_fire') {
     amount = 0.001 + Math.random() * 0.1
   } else {
-    amount = Math.pow(10, Math.random() * 4 - 1) // 0.1 to 1000
+    amount = Math.pow(10, Math.random() * 4 - 1)
     amount = Math.round(amount * 1000) / 1000
   }
 
@@ -198,8 +64,8 @@ export function generateMockTransaction(overrides = {}) {
     id: `tx_${txCounter}`,
     hash,
     type: txType,
-    from: REQUESTER_ADDRESSES[requesterIdx],
-    to: MOCK_AGENTS[agentIdx].address,
+    from: WALLET_ADDRESSES[fromIdx],
+    to: WALLET_ADDRESSES[toIdx],
     amount,
     currency: 'RLUSD',
     timestamp: now.toISOString(),
@@ -209,9 +75,6 @@ export function generateMockTransaction(overrides = {}) {
     isAnomaly,
     anomalyScore,
     anomalyType,
-    agent: MOCK_AGENTS[agentIdx],
-    agentId: MOCK_AGENTS[agentIdx].id,
-    taskType: MOCK_AGENTS[agentIdx].specialty,
     ...overrides,
   }
 }
@@ -229,8 +92,8 @@ function generateHistoricalTransactions() {
     const hoursAgo = daysAgo * 24
     const timestamp = subHours(now, hoursAgo)
 
-    const agentIdx = Math.floor(Math.random() * MOCK_AGENTS.length)
-    const requesterIdx = Math.floor(Math.random() * REQUESTER_ADDRESSES.length)
+    const fromIdx = Math.floor(Math.random() * WALLET_ADDRESSES.length)
+    const toIdx = (fromIdx + 1 + Math.floor(Math.random() * (WALLET_ADDRESSES.length - 1))) % WALLET_ADDRESSES.length
     const typeIdx = Math.floor(Math.random() * TX_TYPES.length)
     const txType = TX_TYPES[typeIdx]
 
@@ -262,8 +125,8 @@ function generateHistoricalTransactions() {
       id: `hist_${i}`,
       hash,
       type: txType,
-      from: REQUESTER_ADDRESSES[requesterIdx],
-      to: MOCK_AGENTS[agentIdx].address,
+      from: WALLET_ADDRESSES[fromIdx],
+      to: WALLET_ADDRESSES[toIdx],
       amount,
       currency: 'RLUSD',
       timestamp: timestamp.toISOString(),
@@ -273,9 +136,6 @@ function generateHistoricalTransactions() {
       isAnomaly,
       anomalyScore,
       anomalyType,
-      agent: MOCK_AGENTS[agentIdx],
-      agentId: MOCK_AGENTS[agentIdx].id,
-      taskType: MOCK_AGENTS[agentIdx].specialty,
     })
   }
 
@@ -425,8 +285,8 @@ export function generateBollingerData() {
   })
 }
 
-// Top agent pairs by volume
-export function getTopAgentPairs() {
+// Top wallet pairs by volume
+export function getTopWalletPairs() {
   const pairs = {}
   HISTORICAL_TRANSACTIONS.forEach(tx => {
     const key = `${tx.from.slice(0, 8)}...${tx.to.slice(0, 8)}`

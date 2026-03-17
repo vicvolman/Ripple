@@ -1,11 +1,10 @@
 import { useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  LayoutDashboard, ShoppingCart, BarChart2, AlertTriangle,
-  Wifi, WifiOff, Zap, Activity, ChevronRight
+  LayoutDashboard, BarChart2, AlertTriangle,
+  Wifi, WifiOff, Activity, ChevronRight, Layers
 } from 'lucide-react'
 import Dashboard from './components/Dashboard.jsx'
-import Marketplace from './components/Marketplace.jsx'
 import Analytics from './components/Analytics.jsx'
 import Anomalies from './components/Anomalies.jsx'
 import { useXRPLStream } from './hooks/useXRPLStream.js'
@@ -13,7 +12,6 @@ import { useMLClassifier } from './hooks/useMLClassifier.js'
 
 const TABS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'marketplace', label: 'Marketplace', icon: ShoppingCart },
   { id: 'analytics', label: 'Analytics', icon: BarChart2 },
   { id: 'anomalies', label: 'Anomalies', icon: AlertTriangle },
 ]
@@ -22,17 +20,17 @@ function AnimatedLogo() {
   return (
     <div className="flex items-center gap-2.5">
       <div className="relative w-8 h-8">
-        <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center">
-          <Zap className="w-4 h-4 text-white" />
+        <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center">
+          <Layers className="w-4 h-4 text-white" />
         </div>
         <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 live-dot border-2 border-[#0a0e1a]" />
       </div>
       <div>
         <div className="text-sm font-bold text-white tracking-tight">
-          Agent<span className="gradient-text">X</span> Protocol
+          Ripple<span className="gradient-text"> Analytics</span>
         </div>
         <div className="text-[9px] text-slate-600 tracking-widest uppercase">
-          AI Marketplace on XRPL
+          XRPL Ledger Insights
         </div>
       </div>
     </div>
@@ -177,7 +175,7 @@ export default function App() {
       <main className="flex-1 max-w-screen-2xl mx-auto w-full px-4 sm:px-6 py-6">
         {/* Breadcrumb */}
         <div className="flex items-center gap-1.5 text-xs text-slate-600 mb-5">
-          <span>AgentX Protocol</span>
+          <span>Ripple Analytics</span>
           <ChevronRight className="w-3 h-3" />
           <span className="text-slate-400 capitalize">{activeTab}</span>
         </div>
@@ -214,9 +212,6 @@ export default function App() {
                 onDismissAnomaly={handleDismissAnomaly}
               />
             )}
-            {activeTab === 'marketplace' && (
-              <Marketplace transactions={transactions} />
-            )}
             {activeTab === 'analytics' && (
               <Analytics transactions={transactions} />
             )}
@@ -238,11 +233,9 @@ export default function App() {
             <span className="text-slate-400 font-semibold">XRPL</span>
             <span>•</span>
             <span className="text-slate-400 font-semibold">RLUSD</span>
-            <span>•</span>
-            <span className="text-slate-400 font-semibold">x402 Protocol</span>
           </div>
           <div className="flex items-center gap-4">
-            <span>© 2026 AgentX Protocol</span>
+            <span>© 2026 Ripple Analytics</span>
             <span className="flex items-center gap-1">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
               <span>All systems operational</span>

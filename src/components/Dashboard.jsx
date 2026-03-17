@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer
 } from 'recharts'
 import {
-  Activity, AlertTriangle, Users, DollarSign,
-  X, ChevronRight, Zap, Shield, TrendingUp
+  Activity, AlertTriangle, Wallet, DollarSign,
+  X, Shield, TrendingUp, ArrowRightLeft
 } from 'lucide-react'
 import LiveFeed from './LiveFeed.jsx'
 
@@ -140,88 +140,59 @@ function AnomalyAlert({ anomaly, onDismiss }) {
   )
 }
 
-// Payment flow animation
-function PaymentFlowDiagram() {
-  const [dotPos, setDotPos] = useState(0)
+// Token flow summary panel
+function TokenFlowPanel({ transactions }) {
+  const flows = useMemo(() => {
+    const byType = {}
+    transactions.forEach(tx => {
+      if (!byType[tx.type]) byType[tx.type] = { count: 0, volume: 0 }
+      byType[tx.type].count++
+      byType[tx.type].volume += parseFloat(tx.amount) || 0
+    })
+    return Object.entries(byType)
+      .map(([type, d]) => ({ type, ...d, volume: Math.round(d.volume * 100) / 100 }))
+      .sort((a, b) => b.volume - a.volume)
+      .slice(0, 5)
+  }, [transactions])
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setDotPos(p => (p + 1) % 4)
-    }, 600)
-    return () => clearInterval(interval)
-  }, [])
+  const typeColors = {
+    Payment: '#3b82f6',
+    EscrowCreate: '#8b5cf6',
+    EscrowFinish: '#06b6d4',
+    EscrowCancel: '#f59e0b',
+    OfferCreate: '#10b981',
+    OfferDelete: '#ef4444',
+    TrustSet: '#f97316',
+    AccountSet: '#ec4899',
+  }
 
-  const nodes = [
-    { label: 'Requester', icon: '👤', color: '#3b82f6' },
-    { label: 'AgentX Protocol', icon: '⚡', color: '#8b5cf6' },
-    { label: 'XRPL Ledger', icon: '🔗', color: '#06b6d4' },
-    { label: 'AI Provider', icon: '🤖', color: '#10b981' },
-  ]
+  const maxVolume = Math.max(...flows.map(f => f.volume), 1)
 
   return (
-    <div className="bg-[#0a0e1a] rounded-xl p-4 border border-[#2a3045]">
+    <div className="bg-[#1a1f2e] border border-[#2a3045] rounded-xl p-4 h-full">
       <div className="flex items-center gap-2 mb-4">
-        <Zap className="w-4 h-4 text-yellow-400" />
-        <span className="text-sm font-semibold text-slate-200">x402 Payment Flow</span>
+        <ArrowRightLeft className="w-4 h-4 text-cyan-400" />
+        <span className="text-sm font-semibold text-slate-200">Token Flow by Type</span>
       </div>
-      <div className="flex items-center justify-between relative">
-        {/* Connection lines */}
-        <div className="absolute inset-x-8 top-6 flex items-center" style={{ zIndex: 0 }}>
-          {[0, 1, 2].map(i => (
-            <div key={i} className="flex-1 relative h-0.5 bg-[#2a3045]">
-              <div
-                className="absolute top-0 h-full transition-all duration-200"
-                style={{
-                  background: 'linear-gradient(90deg, transparent, #3b82f6, transparent)',
-                  width: '30%',
-                  left: dotPos === i ? '0%' : dotPos === i + 1 ? '70%' : '-30%',
-                  opacity: dotPos === i || dotPos === i + 1 ? 1 : 0,
-                }}
+      <div className="space-y-3">
+        {flows.map(f => (
+          <div key={f.type}>
+            <div className="flex items-center justify-between text-xs mb-1">
+              <span className="text-slate-300 font-medium">{f.type}</span>
+              <div className="flex items-center gap-3 text-slate-500">
+                <span>{f.count} txns</span>
+                <span className="font-mono text-slate-400">{f.volume.toLocaleString()} RLUSD</span>
+              </div>
+            </div>
+            <div className="h-2 bg-[#0a0e1a] rounded-full overflow-hidden">
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${(f.volume / maxVolume) * 100}%` }}
+                transition={{ duration: 0.8, ease: 'easeOut' }}
+                className="h-full rounded-full"
+                style={{ background: typeColors[f.type] || '#64748b' }}
               />
             </div>
-          ))}
-        </div>
-
-        {/* Nodes */}
-        {nodes.map((node, i) => (
-          <div key={node.label} className="flex flex-col items-center gap-2 relative z-10">
-            <div
-              className="w-12 h-12 rounded-xl flex items-center justify-center text-xl border-2 transition-all duration-300"
-              style={{
-                borderColor: dotPos === i ? node.color : '#2a3045',
-                background: dotPos === i
-                  ? `${node.color}20`
-                  : '#1a1f2e',
-                boxShadow: dotPos === i ? `0 0 16px ${node.color}40` : 'none',
-              }}
-            >
-              {node.icon}
-            </div>
-            <span className="text-[10px] text-slate-500 text-center leading-tight max-w-[64px]">
-              {node.label}
-            </span>
-          </div>
-        ))}
-      </div>
-
-      {/* Steps */}
-      <div className="mt-4 space-y-1">
-        {[
-          'Requester submits RLUSD payment',
-          'Protocol routes via x402 standard',
-          'XRPL validates & confirms tx',
-          'Provider delivers AI service',
-        ].map((step, i) => (
-          <div
-            key={i}
-            className={`flex items-center gap-2 text-xs transition-all duration-300 ${
-              dotPos === i ? 'text-slate-200' : 'text-slate-600'
-            }`}
-          >
-            <ChevronRight
-              className={`w-3 h-3 shrink-0 transition-colors ${dotPos === i ? 'text-blue-400' : 'text-slate-700'}`}
-            />
-            {step}
           </div>
         ))}
       </div>
@@ -263,7 +234,7 @@ export default function Dashboard({ transactions, anomalyQueue, modelStats, onDi
   // Compute stats
   const totalTx = transactions.length
   const totalVolume = transactions.reduce((sum, tx) => sum + (parseFloat(tx.amount) || 0), 0)
-  const activeAgents = new Set(transactions.map(tx => tx.to)).size
+  const uniqueWallets = new Set([...transactions.map(tx => tx.from), ...transactions.map(tx => tx.to)]).size
   const anomalyCount = (anomalyQueue || []).length + transactions.filter(t => t.isAnomaly).length
 
   // Pie chart data
@@ -296,10 +267,10 @@ export default function Dashboard({ transactions, anomalyQueue, modelStats, onDi
           trend={12}
         />
         <StatCard
-          icon={Users}
-          label="Active Agents"
-          value={activeAgents}
-          subValue="Unique providers"
+          icon={Wallet}
+          label="Unique Wallets"
+          value={uniqueWallets}
+          subValue="Senders & receivers"
           color="bg-purple-500/15 text-purple-400"
           trend={3}
         />
@@ -434,25 +405,8 @@ export default function Dashboard({ transactions, anomalyQueue, modelStats, onDi
           </div>
         </div>
 
-        {/* Payment flow */}
-        <div>
-          <PaymentFlowDiagram />
-
-          {/* Quick stats */}
-          <div className="grid grid-cols-3 gap-3 mt-3">
-            {[
-              { label: 'Protocol Fee', value: '0.1%', icon: '💰' },
-              { label: 'Avg Latency', value: '3.2s', icon: '⚡' },
-              { label: 'x402 Compliant', value: '100%', icon: '✅' },
-            ].map(stat => (
-              <div key={stat.label} className="bg-[#1a1f2e] border border-[#2a3045] rounded-lg p-3 text-center">
-                <div className="text-xl mb-1">{stat.icon}</div>
-                <div className="text-sm font-bold text-slate-200">{stat.value}</div>
-                <div className="text-[10px] text-slate-500">{stat.label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
+        {/* Token flow by type */}
+        <TokenFlowPanel transactions={transactions} />
       </div>
     </div>
   )
